@@ -4,11 +4,9 @@
 //              Simulates PCLK, HREF, VSYNC, and D[7:0] to mimic OV7670
 //              RGB565 output.
 //
-//              Checks:
-//              - Correct byte-pairing (two bytes → one RGB565 pixel)
-//              - RGB565 → RGB444 downsampling correctness
-//              - Write address increments per pixel
-//              - Write address resets on VSYNC rising edge
+// KEY TEST: Verifies the address is NOT incremented in the same cycle
+//           as wr_en=1 (the off-by-one bug fix).
+//           Expected: pixel 0 writes to addr 0, pixel 1 to addr 1, etc.
 //============================================================================
 
 `timescale 1ns / 1ps
@@ -27,6 +25,9 @@ module tb_ov7670_capture;
     wire [11:0] wr_data;
     wire        wr_en;
 
+    integer errors = 0;
+    integer pass   = 0;
+
     //------------------------------------------------------------------------
     // DUT instantiation
     //------------------------------------------------------------------------
@@ -41,63 +42,59 @@ module tb_ov7670_capture;
         .wr_en   (wr_en)
     );
 
-    //------------------------------------------------------------------------
-    // PCLK generation: ~24MHz (41.667ns period)
-    // Using 42ns period for simplicity
-    //------------------------------------------------------------------------
+    // ~24MHz PCLK (41.667ns period → 21ns half-period)
     initial pclk = 0;
-    always #21 pclk = ~pclk; // ~23.8MHz
+    always #21 pclk = ~pclk;
 
     //------------------------------------------------------------------------
-    // Monitor write events
+    // Capture writes into a local array to verify later
     //------------------------------------------------------------------------
-    integer pixel_count = 0;
-    always @(negedge pclk) begin
+    reg [16:0] captured_addr [0:9];
+    reg [11:0] captured_data [0:9];
+    integer capture_idx;
+
+    always @(posedge pclk) begin   // BRAM writes on posedge, so check here
         if (wr_en) begin
-            $display("[%0t] Pixel %0d: addr=%0d, data=0x%03h (R=%01h G=%01h B=%01h)",
-                     $time, pixel_count, wr_addr, wr_data,
-                     wr_data[11:8], wr_data[7:4], wr_data[3:0]);
-            pixel_count <= pixel_count + 1;
+            if (capture_idx < 10) begin
+                captured_addr[capture_idx] <= wr_addr;
+                captured_data[capture_idx] <= wr_data;
+                capture_idx                <= capture_idx + 1;
+            end
         end
     end
 
     //------------------------------------------------------------------------
-    // Task: Send one RGB565 pixel (2 bytes on consecutive PCLK cycles)
-    // byte1 = {R[4:0], G[5:3]}
-    // byte2 = {G[2:0], B[4:0]}
+    // Task: send one RGB565 pixel (2 bytes on consecutive negedge PCLK)
+    // R5=5-bit red, G6=6-bit green, B5=5-bit blue
     //------------------------------------------------------------------------
     task send_pixel;
-        input [4:0] r5;  // 5-bit red
-        input [5:0] g6;  // 6-bit green
-        input [4:0] b5;  // 5-bit blue
+        input [4:0] r5;
+        input [5:0] g6;
+        input [4:0] b5;
         begin
-            // Byte 1: {R[4:0], G[5:3]}
-            d = {r5, g6[5:3]};
-            @(negedge pclk); // Wait for falling edge
-
-            // Byte 2: {G[2:0], B[4:0]}
-            d = {g6[2:0], b5};
+            d = {r5, g6[5:3]};       // byte1 = {R[4:0], G[5:3]}
+            @(negedge pclk);
+            d = {g6[2:0], b5};        // byte2 = {G[2:0], B[4:0]}
             @(negedge pclk);
         end
     endtask
 
     //------------------------------------------------------------------------
-    // Task: Simulate one line of N pixels with HREF high
+    // Task: compute expected RGB444 from RGB565 input
     //------------------------------------------------------------------------
-    task send_line;
-        input integer num_pixels;
-        integer i;
+    function [11:0] expected_rgb444;
+        input [4:0] r5;
+        input [5:0] g6;
+        input [4:0] b5;
+        reg [7:0] byte1_val, byte2_val;
         begin
-            href = 1;
-            for (i = 0; i < num_pixels; i = i + 1) begin
-                // Send pixel with incrementing values for easy verification
-                send_pixel(i[4:0], i[5:0], i[4:0]);
-            end
-            href = 0;
-            // Horizontal blanking (a few PCLK cycles)
-            repeat (10) @(negedge pclk);
+            byte1_val = {r5, g6[5:3]};
+            byte2_val = {g6[2:0], b5};
+            expected_rgb444 = {byte1_val[7:4],               // R[4:1]
+                               {byte1_val[2:0], byte2_val[7]}, // G[5:2]
+                               byte2_val[4:1]};               // B[4:1]
         end
-    endtask
+    endfunction
 
     //------------------------------------------------------------------------
     // Test stimulus
@@ -106,107 +103,195 @@ module tb_ov7670_capture;
         $display("=== OV7670 Capture Testbench ===");
 
         // Initialize
-        rst   = 1;
-        href  = 0;
-        vsync = 0;
-        d     = 8'h00;
+        rst         = 1;
+        href        = 0;
+        vsync       = 0;
+        d           = 8'h00;
+        capture_idx = 0;
 
-        // Hold reset
-        repeat (5) @(negedge pclk);
+        repeat(5) @(negedge pclk);
         rst = 0;
-        repeat (2) @(negedge pclk);
+        repeat(2) @(negedge pclk);
 
         //--------------------------------------------------------------------
-        // Test 1: VSYNC pulse (frame start)
+        // VSYNC pulse to start frame
         //--------------------------------------------------------------------
-        $display("\n--- Test 1: VSYNC Frame Start ---");
+        $display("\n--- Frame Start: VSYNC pulse ---");
         vsync = 1;
-        repeat (5) @(negedge pclk);
+        repeat(3) @(negedge pclk);
         vsync = 0;
-        repeat (5) @(negedge pclk);
+        repeat(3) @(negedge pclk);
 
         //--------------------------------------------------------------------
-        // Test 2: Capture a few pixels on one line
+        // TEST 1: KEY TEST — verify addr starts at 0, increments correctly
+        // Send 5 pixels and verify each writes to addr 0,1,2,3,4
         //--------------------------------------------------------------------
-        $display("\n--- Test 2: Capture 5 pixels (1 line) ---");
-        pixel_count = 0;
-        send_line(5);
-
-        // Verify: should have 5 writes with addresses 0-4
-        if (pixel_count == 5)
-            $display("PASS: Captured 5 pixels correctly");
-        else
-            $display("FAIL: Expected 5 pixels, got %0d", pixel_count);
-
-        //--------------------------------------------------------------------
-        // Test 3: Second line — address should continue from 5
-        //--------------------------------------------------------------------
-        $display("\n--- Test 3: Capture 3 pixels (2nd line) ---");
-        pixel_count = 0;
-        send_line(3);
-
-        //--------------------------------------------------------------------
-        // Test 4: VSYNC resets address
-        //--------------------------------------------------------------------
-        $display("\n--- Test 4: VSYNC resets write address ---");
-        vsync = 1;
-        repeat (3) @(negedge pclk);
-        vsync = 0;
-        repeat (3) @(negedge pclk);
-
-        pixel_count = 0;
-        send_line(2);
-
-        // After VSYNC, address should start from 0 again
-        $display("Address after VSYNC should start from 0");
-
-        //--------------------------------------------------------------------
-        // Test 5: Verify specific RGB565 → RGB444 conversion
-        //--------------------------------------------------------------------
-        $display("\n--- Test 5: RGB565 to RGB444 Conversion ---");
-        vsync = 1;
-        repeat (3) @(negedge pclk);
-        vsync = 0;
-        repeat (3) @(negedge pclk);
-
-        // Send known pixel: R=31 (0x1F), G=63 (0x3F), B=31 (0x1F) = full white
-        // byte1 = {5'b11111, 3'b111} = 8'hFF
-        // byte2 = {3'b111, 5'b11111} = 8'hFF
-        // Expected RGB444: R=F, G=F, B=F = 0xFFF
+        $display("\n--- Test 1: Address sequence (off-by-one fix check) ---");
+        capture_idx = 0;
         href = 1;
-        $display("Sending white pixel (R=31, G=63, B=31)...");
-        send_pixel(5'd31, 6'd63, 5'd31);
-
-        // Send known pixel: R=0, G=0, B=0 = full black
-        // Expected RGB444: R=0, G=0, B=0 = 0x000
-        $display("Sending black pixel (R=0, G=0, B=0)...");
-        send_pixel(5'd0, 6'd0, 5'd0);
-
-        // Send known pixel: R=16, G=32, B=8
-        // byte1 = {5'b10000, 3'b100} = 8'h84
-        // byte2 = {3'b000, 5'b01000} = 8'h08
-        // RGB444: R=10000>>1=1000=0x8, G=100000>>2=1000=0x8, B=01000>>1=0100=0x4
-        $display("Sending test pixel (R=16, G=32, B=8)...");
-        send_pixel(5'd16, 6'd32, 5'd8);
+        // Send 5 known pixels
+        send_pixel(5'd31, 6'd0,  5'd0);   // Pixel 0: R=max, G=0, B=0
+        send_pixel(5'd0,  6'd63, 5'd0);   // Pixel 1: R=0, G=max, B=0
+        send_pixel(5'd0,  6'd0,  5'd31);  // Pixel 2: R=0, G=0, B=max
+        send_pixel(5'd31, 6'd63, 5'd31);  // Pixel 3: all max = white
+        send_pixel(5'd0,  6'd0,  5'd0);   // Pixel 4: all 0 = black
         href = 0;
 
-        repeat (20) @(negedge pclk);
-        $display("\n=== Testbench Complete ===");
+        // Wait for last pixel's addr increment (1 extra cycle)
+        repeat(4) @(negedge pclk);
+
+        // Verify: each pixel should have been written to addrs 0,1,2,3,4
+        $display("Checking pixel write addresses and data...");
+        begin : check_block
+            integer i;
+            reg [11:0] exp;
+            for (i = 0; i < 5; i = i + 1) begin
+                case(i)
+                    0: exp = expected_rgb444(5'd31, 6'd0,  5'd0);
+                    1: exp = expected_rgb444(5'd0,  6'd63, 5'd0);
+                    2: exp = expected_rgb444(5'd0,  6'd0,  5'd31);
+                    3: exp = expected_rgb444(5'd31, 6'd63, 5'd31);
+                    4: exp = expected_rgb444(5'd0,  6'd0,  5'd0);
+                    default: exp = 12'hXXX;
+                endcase
+
+                if (captured_addr[i] === i[16:0]) begin
+                    $display("PASS pixel %0d: addr=%0d (correct)", i, captured_addr[i]);
+                    pass = pass + 1;
+                end else begin
+                    $display("FAIL pixel %0d: addr=%0d, expected %0d (OFF-BY-ONE?)",
+                             i, captured_addr[i], i);
+                    errors = errors + 1;
+                end
+
+                if (captured_data[i] === exp) begin
+                    $display("PASS pixel %0d: data=0x%03h (correct)", i, captured_data[i]);
+                    pass = pass + 1;
+                end else begin
+                    $display("FAIL pixel %0d: data=0x%03h, expected=0x%03h",
+                             i, captured_data[i], exp);
+                    errors = errors + 1;
+                end
+            end
+        end
+
+        //--------------------------------------------------------------------
+        // TEST 2: VSYNC resets write address to 0
+        //--------------------------------------------------------------------
+        $display("\n--- Test 2: VSYNC resets write address ---");
+        // Send one more pixel (should go to addr 5 from test 1)
+        href = 1;
+        capture_idx = 0;
+        send_pixel(5'd15, 6'd30, 5'd15);
+        href = 0;
+        repeat(4) @(negedge pclk);
+        $display("Before VSYNC: pixel wrote to addr=%0d (expected 5)", captured_addr[0]);
+        if (captured_addr[0] === 17'd5) begin
+            $display("PASS: addr=5 correct");
+            pass = pass + 1;
+        end else begin
+            $display("FAIL: addr=%0d, expected 5", captured_addr[0]);
+            errors = errors + 1;
+        end
+
+        // Now send VSYNC
+        vsync = 1;
+        repeat(3) @(negedge pclk);
+        vsync = 0;
+        repeat(3) @(negedge pclk);
+
+        // Send one pixel after VSYNC — should go to addr 0
+        capture_idx = 0;
+        href = 1;
+        send_pixel(5'd10, 6'd20, 5'd10);
+        href = 0;
+        repeat(4) @(negedge pclk);
+
+        if (captured_addr[0] === 17'd0) begin
+            $display("PASS: After VSYNC, addr=0 (frame reset correct)");
+            pass = pass + 1;
+        end else begin
+            $display("FAIL: After VSYNC, addr=%0d, expected 0", captured_addr[0]);
+            errors = errors + 1;
+        end
+
+        //--------------------------------------------------------------------
+        // TEST 3: RGB565 -> RGB444 conversion correctness
+        //--------------------------------------------------------------------
+        $display("\n--- Test 3: RGB565 -> RGB444 conversion ---");
+        vsync = 1;
+        repeat(3) @(negedge pclk);
+        vsync = 0;
+        repeat(3) @(negedge pclk);
+
+        capture_idx = 0;
+        href = 1;
+
+        // White: R=31, G=63, B=31 → RGB444 = 0xFFF
+        send_pixel(5'd31, 6'd63, 5'd31);
+        // Black: all 0 → 0x000
+        send_pixel(5'd0, 6'd0, 5'd0);
+        // Pure red: R=31, G=0, B=0 → RGB444 = {R[4:1]=1111,G=0,B=0} = 0xF00
+        send_pixel(5'd31, 6'd0, 5'd0);
+
+        href = 0;
+        repeat(4) @(negedge pclk);
+
+        begin : rgb_check
+            reg [11:0] exp;
+
+            // White
+            exp = expected_rgb444(5'd31, 6'd63, 5'd31);
+            if (captured_data[0] === exp) begin
+                $display("PASS White: 0x%03h", captured_data[0]);
+                pass = pass + 1;
+            end else begin
+                $display("FAIL White: got 0x%03h, expected 0x%03h", captured_data[0], exp);
+                errors = errors + 1;
+            end
+
+            // Black
+            exp = expected_rgb444(5'd0, 6'd0, 5'd0);
+            if (captured_data[1] === exp) begin
+                $display("PASS Black: 0x%03h", captured_data[1]);
+                pass = pass + 1;
+            end else begin
+                $display("FAIL Black: got 0x%03h, expected 0x%03h", captured_data[1], exp);
+                errors = errors + 1;
+            end
+
+            // Pure red
+            exp = expected_rgb444(5'd31, 6'd0, 5'd0);
+            if (captured_data[2] === exp) begin
+                $display("PASS Red: 0x%03h (expected 0x%03h)", captured_data[2], exp);
+                pass = pass + 1;
+            end else begin
+                $display("FAIL Red: got 0x%03h, expected 0x%03h", captured_data[2], exp);
+                errors = errors + 1;
+            end
+        end
+
+        //--------------------------------------------------------------------
+        // Summary
+        //--------------------------------------------------------------------
+        $display("\n=== Results ===");
+        $display("PASS: %0d  FAIL: %0d", pass, errors);
+        if (errors == 0)
+            $display("ALL TESTS PASSED");
+        else
+            $display("SOME TESTS FAILED");
+
         $finish;
     end
 
-    //------------------------------------------------------------------------
-    // Timeout watchdog
-    //------------------------------------------------------------------------
+    // Timeout
     initial begin
-        #10_000_000; // 10ms timeout
-        $display("ERROR: Testbench timeout!");
+        #10_000_000;
+        $display("ERROR: Timeout!");
         $finish;
     end
 
-    //------------------------------------------------------------------------
-    // Dump waveforms
-    //------------------------------------------------------------------------
+    // Waveform dump
     initial begin
         $dumpfile("tb_ov7670_capture.vcd");
         $dumpvars(0, tb_ov7670_capture);
