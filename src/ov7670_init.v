@@ -10,6 +10,9 @@
 //
 // Uses a ROM-style init table with {addr, data} pairs.
 // Configured for RGB565 QVGA (320x240) output.
+//
+// CRITICAL FIX: Uses edge detection on sccb_done to prevent
+//   double-advancing when done is a level instead of a pulse.
 //============================================================================
 
 module ov7670_init (
@@ -50,7 +53,20 @@ module ov7670_init (
     reg [3:0]  state;
     reg [27:0] delay_count;  // General-purpose delay counter
     reg [6:0]  reg_index;    // Index into the register init table
-    wire [15:0] current_entry_wire = get_reg_entry(reg_index); // Avoids select-on-function-call error
+
+    //------------------------------------------------------------------------
+    // Edge detection on sccb_done
+    // CRITICAL: prevents double-advancing if done stays high for >1 cycle
+    //------------------------------------------------------------------------
+    reg sccb_done_prev;
+    wire sccb_done_rising = sccb_done & ~sccb_done_prev;
+
+    always @(posedge clk) begin
+        if (rst)
+            sccb_done_prev <= 1'b0;
+        else
+            sccb_done_prev <= sccb_done;
+    end
 
     //------------------------------------------------------------------------
     // Register initialization ROM table
@@ -60,7 +76,7 @@ module ov7670_init (
     //------------------------------------------------------------------------
     localparam NUM_REGS = 7'd66;  // Number of register entries (excluding end marker)
 
-
+    wire [15:0] current_entry_wire = get_reg_entry(reg_index);
 
     //------------------------------------------------------------------------
     // ROM read: return {addr, data} for given index
@@ -76,13 +92,13 @@ module ov7670_init (
 
                 // Clock
                 7'd3:  get_reg_entry = {8'h11, 8'h80}; // CLKRC: use external clock directly
-                7'd4:  get_reg_entry = {8'h6B, 8'h4A}; // DBLV: PLL x4 // TODO: verify PLL setting
+                7'd4:  get_reg_entry = {8'h6B, 8'h4A}; // DBLV: PLL x4
 
                 // Image format and DCW for QVGA
                 7'd5:  get_reg_entry = {8'h0C, 8'h0C}; // COM3: scale enable + DCW enable
-                7'd6:  get_reg_entry = {8'h3E, 8'h19}; // COM14: DCW+scaling PCLK, divider /2 // TODO: verify
+                7'd6:  get_reg_entry = {8'h3E, 8'h19}; // COM14: DCW+scaling PCLK, divider /2
                 7'd7:  get_reg_entry = {8'h72, 8'h11}; // SCALING_DCWCTR: H and V downsample by 2
-                7'd8:  get_reg_entry = {8'h73, 8'hF1}; // SCALING_PCLK_DIV: bypass clock divider // TODO: verify
+                7'd8:  get_reg_entry = {8'h73, 8'hF1}; // SCALING_PCLK_DIV: bypass clock divider
 
                 // Window / framing for QVGA
                 7'd9:  get_reg_entry = {8'h17, 8'h16}; // HSTART
@@ -93,7 +109,9 @@ module ov7670_init (
                 7'd14: get_reg_entry = {8'h03, 8'h0A}; // VREF
 
                 // Pixel clock options
-                7'd15: get_reg_entry = {8'h15, 8'h00}; // COM10: PCLK always toggles (Required for edge detection)
+                // COM10 = 0x20: PCLK does not toggle during horizontal blank
+                // This prevents spurious data captures during blanking
+                7'd15: get_reg_entry = {8'h15, 8'h20}; // COM10: PCLK no toggle during hblank
 
                 // Disable test pattern
                 7'd16: get_reg_entry = {8'h70, 8'h3A}; // SCALING_XSC: test_pattern[0]=0
@@ -111,10 +129,10 @@ module ov7670_init (
                 // AGC / AEC / AWB
                 7'd25: get_reg_entry = {8'h13, 8'hE7}; // COM8: fast AGC, AEC, banding, AGC+AWB+AEC
                 7'd26: get_reg_entry = {8'h00, 8'h00}; // GAIN: AGC gain = 0
-                7'd27: get_reg_entry = {8'h10, 8'h40}; // AECH: exposure // TODO: verify
+                7'd27: get_reg_entry = {8'h10, 8'h40}; // AECH: exposure
                 7'd28: get_reg_entry = {8'h01, 8'h80}; // BLUE: AWB blue gain
                 7'd29: get_reg_entry = {8'h02, 8'h80}; // RED: AWB red gain
-                7'd30: get_reg_entry = {8'h0E, 8'h01}; // COM5: reserved default // TODO: verify
+                7'd30: get_reg_entry = {8'h0E, 8'h01}; // COM5: reserved default
                 7'd31: get_reg_entry = {8'h0F, 8'h4B}; // COM6: reset timing on format change
 
                 // Gamma curve
@@ -155,17 +173,17 @@ module ov7670_init (
 
                 // Banding filter (50Hz for Thailand)
                 7'd58: get_reg_entry = {8'h3B, 8'h0A}; // COM11: 50Hz auto detect + banding ON
-                7'd59: get_reg_entry = {8'h9D, 8'h99}; // BD50ST: 50Hz banding value // TODO: verify
-                7'd60: get_reg_entry = {8'hA5, 8'h0F}; // BD50MAX // TODO: verify
+                7'd59: get_reg_entry = {8'h9D, 8'h99}; // BD50ST: 50Hz banding value
+                7'd60: get_reg_entry = {8'hA5, 8'h0F}; // BD50MAX
 
                 // Histogram AEC
-                7'd61: get_reg_entry = {8'hAA, 8'h94}; // HAECC7: histogram-based AEC // TODO: verify
+                7'd61: get_reg_entry = {8'hAA, 8'h94}; // HAECC7: histogram-based AEC
 
                 // Additional recommended settings
-                7'd62: get_reg_entry = {8'hB0, 8'h84}; // UNDOC: recommended by app note // TODO: verify
+                7'd62: get_reg_entry = {8'hB0, 8'h84}; // UNDOC: recommended by app note
                 7'd63: get_reg_entry = {8'hB1, 8'h0C}; // ABLC1: auto black level compensation
-                7'd64: get_reg_entry = {8'hB2, 8'h0E}; // UNDOC: recommended // TODO: verify
-                7'd65: get_reg_entry = {8'hB3, 8'h80}; // THL_ST: ABLC target // TODO: verify
+                7'd64: get_reg_entry = {8'hB2, 8'h0E}; // UNDOC: recommended
+                7'd65: get_reg_entry = {8'hB3, 8'h80}; // THL_ST: ABLC target
 
                 default: get_reg_entry = {8'hFF, 8'hFF}; // End marker
             endcase
@@ -241,9 +259,10 @@ module ov7670_init (
 
                 //------------------------------------------------------------
                 // Wait for software reset SCCB transaction to complete
+                // Uses edge detection to prevent glitches
                 //------------------------------------------------------------
                 ST_SWRESET_WAIT: begin
-                    if (sccb_done) begin
+                    if (sccb_done_rising) begin
                         state       <= ST_SETTLE_WAIT;
                         delay_count <= 28'd0;
                     end
@@ -269,7 +288,7 @@ module ov7670_init (
                         // All registers sent
                         state <= ST_INIT_DONE;
                     end else begin
-                        // Load register entry from ROM via continuous wire assignment
+                        // Load register entry from ROM
                         sccb_addr    <= current_entry_wire[15:8];
                         sccb_data    <= current_entry_wire[7:0];
                         sccb_start   <= 1'b1;
@@ -279,9 +298,10 @@ module ov7670_init (
 
                 //------------------------------------------------------------
                 // Wait for SCCB transaction to complete
+                // Uses edge detection for robustness
                 //------------------------------------------------------------
                 ST_WAIT_SCCB: begin
-                    if (sccb_done) begin
+                    if (sccb_done_rising) begin
                         state <= ST_NEXT_REG;
                     end
                 end

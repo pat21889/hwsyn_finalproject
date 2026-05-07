@@ -16,17 +16,22 @@
 // Timing (at 100MHz system clock):
 //   tCYC >= 10us per bit -> SCL clock <= 100kHz
 //   Using 500 system clocks per half-period = 1000 clocks per bit = 10us @ 100MHz
+//
+// CRITICAL FIX: sda_out and sda_oe are separate outputs.
+//   The tristate assign must be done at the TOP level:
+//     assign cam_sda = sda_oe ? sda_out : 1'bz;
 //============================================================================
 
 module sccb_master (
-    input  wire       clk,     // System clock (100MHz)
-    input  wire       rst,     // Synchronous reset (active high)
-    input  wire       start,   // Pulse high to begin a write transaction
-    input  wire [7:0] addr,    // Register sub-address (phase 2)
-    input  wire [7:0] data,    // Register write data (phase 3)
-    output reg        done,    // Pulses high for 1 cycle when transaction completes
-    output reg        scl,     // SCCB clock output
-    inout  wire       sda      // SCCB bidirectional data line
+    input  wire       clk,       // System clock (100MHz)
+    input  wire       rst,       // Synchronous reset (active high)
+    input  wire       start,     // Pulse high to begin a write transaction
+    input  wire [7:0] addr,      // Register sub-address (phase 2)
+    input  wire [7:0] data,      // Register write data (phase 3)
+    output reg        done,      // Pulses high for 1 cycle when transaction completes
+    output reg        scl,       // SCCB clock output
+    output reg        sda_out,   // SDA output value (directly drives line when sda_oe=1)
+    output reg        sda_oe     // SDA output enable (1 = drive sda_out, 0 = high-Z)
 );
 
     //------------------------------------------------------------------------
@@ -58,25 +63,14 @@ module sccb_master (
     // Internal registers
     //------------------------------------------------------------------------
     reg [9:0]  clk_count;      // Clock divider counter
-    reg [3:0]  bit_count;      // Bit counter within a phase (0-7 for data, 8 for DC)
+    reg [3:0]  bit_count;      // Bit counter within a phase (0-7 for data)
     reg [7:0]  shift_reg;      // Shift register for current byte being sent
-    reg        sda_out;        // SDA output value
-    reg        sda_oe;         // SDA output enable (1 = drive, 0 = tri-state/release)
     reg [1:0]  start_phase;    // Sub-phases within START condition
     reg [1:0]  stop_phase;     // Sub-phases within STOP condition
 
     // Latched address and data (captured on start)
     reg [7:0]  addr_reg;
     reg [7:0]  data_reg;
-
-    //------------------------------------------------------------------------
-    // SDA open-drain emulation
-    // SCCB/I2C requires open-drain: only drive LOW, never actively drive HIGH.
-    // When we want to output '0': drive the line low  (sda_oe=1, sda_out=0)
-    // When we want to output '1': release the line    (external pull-up pulls high)
-    // When sda_oe=0: also release (for don't-care / ACK bits)
-    //------------------------------------------------------------------------
-    assign sda = (sda_oe && !sda_out) ? 1'b0 : 1'bz;
 
     //------------------------------------------------------------------------
     // SCL clock divider tick
@@ -89,7 +83,6 @@ module sccb_master (
     always @(posedge clk) begin
         if (rst) begin
             state              <= ST_IDLE;
-
             clk_count          <= 10'd0;
             bit_count          <= 4'd0;
             shift_reg          <= 8'd0;
@@ -102,7 +95,7 @@ module sccb_master (
             addr_reg           <= 8'd0;
             data_reg           <= 8'd0;
         end else begin
-            done <= 1'b0; // Default: done is a pulse
+            done <= 1'b0; // Default: done is a single-cycle pulse
 
             case (state)
                 //------------------------------------------------------------
@@ -158,6 +151,7 @@ module sccb_master (
                                 bit_count <= 4'd0;
                                 shift_reg <= DEVICE_ADDR; // Phase 1: device address 0x42
                                 sda_out   <= DEVICE_ADDR[7]; // MSB first
+                                sda_oe    <= 1'b1;
                             end
                         end
                         default: start_phase <= 2'd0;
@@ -179,9 +173,9 @@ module sccb_master (
                             scl <= 1'b0;
                             if (bit_count == 4'd7) begin
                                 // All 8 bits sent, move to don't-care
-                                state              <= ST_DONTCARE1;
-                                bit_count          <= 4'd0;
-                                sda_oe             <= 1'b0; // Release SDA for don't-care
+                                state     <= ST_DONTCARE1;
+                                bit_count <= 4'd0;
+                                sda_oe    <= 1'b0; // Release SDA for don't-care
                             end else begin
                                 bit_count <= bit_count + 4'd1;
                                 shift_reg <= {shift_reg[6:0], 1'b0};
@@ -224,9 +218,9 @@ module sccb_master (
                         end else begin
                             scl <= 1'b0;
                             if (bit_count == 4'd7) begin
-                                state              <= ST_DONTCARE2;
-                                bit_count          <= 4'd0;
-                                sda_oe             <= 1'b0;
+                                state     <= ST_DONTCARE2;
+                                bit_count <= 4'd0;
+                                sda_oe    <= 1'b0;
                             end else begin
                                 bit_count <= bit_count + 4'd1;
                                 shift_reg <= {shift_reg[6:0], 1'b0};
@@ -269,9 +263,9 @@ module sccb_master (
                         end else begin
                             scl <= 1'b0;
                             if (bit_count == 4'd7) begin
-                                state              <= ST_DONTCARE3;
-                                bit_count          <= 4'd0;
-                                sda_oe             <= 1'b0;
+                                state     <= ST_DONTCARE3;
+                                bit_count <= 4'd0;
+                                sda_oe    <= 1'b0;
                             end else begin
                                 bit_count <= bit_count + 4'd1;
                                 shift_reg <= {shift_reg[6:0], 1'b0};
@@ -342,6 +336,7 @@ module sccb_master (
 
                 //------------------------------------------------------------
                 // DONE: Signal completion, return to idle
+                // done is a single-cycle pulse (cleared by default at top)
                 //------------------------------------------------------------
                 ST_DONE: begin
                     done    <= 1'b1;

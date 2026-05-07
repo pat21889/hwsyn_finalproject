@@ -33,6 +33,7 @@ module tb_top;
     wire [3:0] vga_g;
     wire [3:0] vga_b;
     reg  [1:0] sw;
+    wire [3:0] led;
 
     // Pull-up on SDA
     pullup (cam_sda);
@@ -56,7 +57,8 @@ module tb_top;
         .vga_r     (vga_r),
         .vga_g     (vga_g),
         .vga_b     (vga_b),
-        .sw        (sw)
+        .sw        (sw),
+        .led       (led)
     );
 
     //------------------------------------------------------------------------
@@ -133,7 +135,6 @@ module tb_top;
         #500;
 
         // Check that MMCM locked (in simulation, it should lock quickly)
-        // Note: MMCM simulation model may not behave exactly like hardware
         $display("[%0t] Checking initial outputs...", $time);
 
         //--------------------------------------------------------------------
@@ -176,6 +177,12 @@ module tb_top;
             $display("PASS: vga_vsync is not X (%b)", vga_vsync);
         else
             $display("WARNING: vga_vsync is X");
+
+        //--------------------------------------------------------------------
+        // Check LED[0] = init_done status
+        //--------------------------------------------------------------------
+        $display("\n[%0t] LED status: init_done=%b, vsync=%b, href=%b, pclk=%b",
+                 $time, led[0], led[1], led[2], led[3]);
 
         //--------------------------------------------------------------------
         // Test filter switching
