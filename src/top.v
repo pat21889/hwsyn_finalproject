@@ -1,14 +1,7 @@
 //============================================================================
 // Module: top
 // Description: Top-level module for Real-Time Video Capture and Processing System
-//              Wires together all sub-modules:
-//                - clk_wiz:       Clock generation (25MHz VGA, 24MHz XCLK)
-//                - ov7670_init:   Camera initialization sequencer
-//                - sccb_master:   SCCB protocol controller
-//                - ov7670_capture: Pixel capture from camera
-//                - frame_buffer:  Dual-port BRAM
-//                - vga_sync:      VGA timing generator
-//                - vga_display:   Frame buffer reader + filter + VGA output
+//              Simplified single-bank version for debugging.
 //
 // Target: Basys 3 (Xilinx Artix-7 xc7a35tcpg236-1)
 //============================================================================
@@ -33,29 +26,22 @@ module top (
     output wire [3:0]  vga_g,        // VGA green channel [3:0]
     output wire [3:0]  vga_b,        // VGA blue channel [3:0]
     // User controls
-    input  wire [1:0]  sw,        // Filter selection
-    output wire [3:0]  led        // Hardware Debugging LEDs
+    input  wire [1:0]  sw,           // Filter selection
+    output wire [3:0]  led           // Hardware Debugging LEDs
 );
 
     //------------------------------------------------------------------------
-    // Internal wires
+    // Internal wires — Clock domain
     //------------------------------------------------------------------------
-    // Clock domain signals
-    wire clk_25mhz;        // 25MHz VGA pixel clock
-    wire clk_24mhz;        // 24MHz camera XCLK
-    wire mmcm_locked;      // MMCM lock status
-
-    // System reset: active high, de-asserts when MMCM is locked
+    wire clk_25mhz;
+    wire clk_24mhz;
+    wire mmcm_locked;
     wire sys_rst = ~mmcm_locked;
 
     //------------------------------------------------------------------------
-    // Reset synchronizers (Bug Fix #3: CDC for reset signal)
-    // sys_rst originates in the MMCM/clk100 domain. It must be synchronized
-    // into each destination clock domain with a 2-flop synchronizer to
-    // prevent metastability on de-assertion.
+    // Reset synchronizers
     //------------------------------------------------------------------------
-
-    // 25MHz VGA domain reset synchronizer
+    // 25MHz VGA domain
     reg rst_25_meta, rst_25_sync;
     always @(posedge clk_25mhz or posedge sys_rst) begin
         if (sys_rst) begin
@@ -67,9 +53,9 @@ module top (
         end
     end
 
-    // PCLK camera domain reset synchronizer
+    // PCLK camera domain
     reg rst_pclk_meta, rst_pclk_sync;
-    always @(negedge cam_pclk or posedge sys_rst) begin
+    always @(posedge cam_pclk or posedge sys_rst) begin
         if (sys_rst) begin
             rst_pclk_meta <= 1'b1;
             rst_pclk_sync <= 1'b1;
@@ -79,31 +65,29 @@ module top (
         end
     end
 
-    // SCCB interface wires
+    //------------------------------------------------------------------------
+    // Internal wires — SCCB
+    //------------------------------------------------------------------------
     wire       sccb_start;
     wire [7:0] sccb_addr;
     wire [7:0] sccb_data;
     wire       sccb_done;
     wire       sccb_scl;
-    wire       sccb_sda;
 
-    // Camera initialization wires
+    // Camera init
     wire       cam_rst_from_init;
     wire       init_done;
 
-    // Capture to frame buffer wires
-    wire [15:0] cap_wr_addr;
+    // Capture to frame buffer
+    wire [16:0] cap_wr_addr;
     wire [11:0] cap_wr_data;
     wire        cap_wr_en;
-    wire        cap_bank_sel;
 
-    // Frame buffer to VGA display wires
-    wire [15:0] vga_rd_addr_even;
-    wire [15:0] vga_rd_addr_odd;
-    wire [11:0] vga_rd_data_even;
-    wire [11:0] vga_rd_data_odd;
+    // Frame buffer to VGA display
+    wire [16:0] vga_rd_addr;
+    wire [11:0] vga_rd_data;
 
-    // VGA sync wires
+    // VGA sync
     wire [9:0]  hcount;
     wire [9:0]  vcount;
     wire        hactive;
@@ -114,20 +98,13 @@ module top (
     //------------------------------------------------------------------------
     // Camera control outputs
     //------------------------------------------------------------------------
-    assign cam_xclk = clk_24mhz;           // Drive 24MHz XCLK to camera
-    assign cam_pwdn = 1'b0;                 // Power down = 0 (normal operation)
-    assign cam_rst  = cam_rst_from_init;    // RST controlled by init sequencer
-    assign cam_scl  = sccb_scl;             // SCCB clock to camera
-
-    // SDA is directly handled by sccb_master inout
-    // The sccb_master module drives cam_sda through its inout port
+    assign cam_xclk = clk_25mhz;            // Drive 25MHz XCLK (reference uses 25MHz, not 24MHz)
+    assign cam_pwdn = 1'b0;
+    assign cam_rst  = 1'b1;                  // Always not-in-reset (reference: assign reset = 1)
+    assign cam_scl  = sccb_scl;
 
     //------------------------------------------------------------------------
-    // VGA sync outputs — delayed by 2 clock cycles
-    // The vga_display module has a 2-cycle latency:
-    //   1 cycle for BRAM read/hcount_d
-    //   1 cycle for vga_r output register
-    // Therefore, hsync and vsync must be delayed by 2 cycles to remain aligned.
+    // VGA sync delay: 2 cycles to match display pipeline latency
     //------------------------------------------------------------------------
     reg hsync_d1, vsync_d1;
     reg hsync_d2, vsync_d2;
@@ -150,45 +127,39 @@ module top (
     //========================================================================
     // Hardware Debugging (LEDs)
     //========================================================================
-    assign led[0] = init_done;           // High when camera initialized
-    assign led[1] = cam_vsync;           // Blinks when camera sends frames
-    assign led[2] = cam_href;            // Should be dimly lit (pulse width ~50%)
-    assign led[3] = cam_pclk;            // Should be dimly lit (24MHz clock)
+    assign led[0] = init_done;
+    assign led[1] = cam_vsync;
+    assign led[2] = cam_href;
+    assign led[3] = cam_pclk;
 
     //========================================================================
     // Module Instantiations
     //========================================================================
 
-    //------------------------------------------------------------------------
-    // 1. Clock Wizard — generates 25MHz (VGA) and 24MHz (camera XCLK)
-    //------------------------------------------------------------------------
+    // 1. Clock Wizard
     clk_wiz u_clk_wiz (
         .clk_in    (clk100),
-        .rst       (1'b0),           // Don't reset MMCM on system reset
+        .rst       (1'b0),
         .clk_25mhz (clk_25mhz),
         .clk_24mhz (clk_24mhz),
         .locked    (mmcm_locked)
     );
 
-    //------------------------------------------------------------------------
-    // 2. SCCB Master — I2C-like protocol controller for camera configuration
-    //------------------------------------------------------------------------
+    // 2. SCCB Master
     sccb_master u_sccb (
-        .clk   (clk100),            // Runs on 100MHz system clock
+        .clk   (clk100),
         .rst   (sys_rst),
         .start (sccb_start),
         .addr  (sccb_addr),
         .data  (sccb_data),
         .done  (sccb_done),
         .scl   (sccb_scl),
-        .sda   (cam_sda)            // Direct connection to camera SDA
+        .sda   (cam_sda)
     );
 
-    //------------------------------------------------------------------------
-    // 3. OV7670 Initialization Sequencer — configures camera registers
-    //------------------------------------------------------------------------
+    // 3. OV7670 Init Sequencer
     ov7670_init u_init (
-        .clk        (clk100),        // Runs on 100MHz system clock
+        .clk        (clk100),
         .rst        (sys_rst),
         .sccb_start (sccb_start),
         .sccb_addr  (sccb_addr),
@@ -198,47 +169,32 @@ module top (
         .init_done  (init_done)
     );
 
-    //------------------------------------------------------------------------
-    // 4. OV7670 Capture — captures pixel data from camera
-    //    Clocked on cam_pclk (camera pixel clock domain)
-    //------------------------------------------------------------------------
+    // 4. OV7670 Capture (reference-based, no reset needed)
     ov7670_capture u_capture (
-        .pclk    (cam_pclk),
-        .rst     (rst_pclk_sync),   // Use PCLK-domain synchronized reset
-        .href    (cam_href),
-        .vsync   (cam_vsync),
-        .d       (cam_d),
-        .wr_addr  (cap_wr_addr),
-        .wr_data  (cap_wr_data),
-        .wr_en    (cap_wr_en),
-        .bank_sel (cap_bank_sel)
+        .pclk  (cam_pclk),
+        .vsync (cam_vsync),
+        .href  (cam_href),
+        .d     (cam_d),
+        .addr  (cap_wr_addr),
+        .dout  (cap_wr_data),
+        .we    (cap_wr_en)
     );
 
-    //------------------------------------------------------------------------
-    // 5. Frame Buffer — dual-port BRAM
-    //    Port A (write): clocked on cam_pclk, driven by ov7670_capture
-    //    Port B (read):  clocked on clk_25mhz, read by vga_display
-    //------------------------------------------------------------------------
+    // 5. Frame Buffer (simplified single-bank)
     frame_buffer u_fbuf (
-        .clk_a       (cam_pclk),
-        .we_a        (cap_wr_en),
-        .bank_sel_a  (cap_bank_sel),
-        .addr_a      (cap_wr_addr),
-        .din_a       (cap_wr_data),
-        .clk_b       (clk_25mhz),
-        .addr_even_b (vga_rd_addr_even),
-        .addr_odd_b  (vga_rd_addr_odd),
-        .dout_even_b (vga_rd_data_even),
-        .dout_odd_b  (vga_rd_data_odd)
+        .clk_a  (cam_pclk),
+        .we_a   (cap_wr_en),
+        .addr_a (cap_wr_addr),
+        .din_a  (cap_wr_data),
+        .clk_b  (clk_25mhz),
+        .addr_b (vga_rd_addr),
+        .dout_b (vga_rd_data)
     );
 
-    //------------------------------------------------------------------------
-    // 6. VGA Sync Generator — generates 640x480 @ 60Hz timing signals
-    //    Clocked on 25MHz VGA pixel clock
-    //------------------------------------------------------------------------
+    // 6. VGA Sync Generator
     vga_sync u_vga_sync (
         .clk     (clk_25mhz),
-        .rst     (rst_25_sync),     // Use 25MHz-domain synchronized reset
+        .rst     (rst_25_sync),
         .hsync   (hsync_wire),
         .vsync   (vsync_wire),
         .hactive (hactive),
@@ -247,26 +203,20 @@ module top (
         .vcount  (vcount)
     );
 
-    //------------------------------------------------------------------------
-    // 7. VGA Display — reads frame buffer, applies filter, drives VGA output
-    //    Clocked on 25MHz VGA pixel clock
-    //    image_filter is instantiated inside vga_display
-    //------------------------------------------------------------------------
+    // 7. VGA Display (simplified single-bank, nearest-neighbor)
     vga_display u_vga_display (
-        .clk          (clk_25mhz),
-        .rst          (rst_25_sync),
-        .hcount       (hcount),
-        .vcount       (vcount),
-        .hactive      (hactive),
-        .vactive      (vactive),
-        .sw           (sw),
-        .rd_addr_even (vga_rd_addr_even),
-        .rd_addr_odd  (vga_rd_addr_odd),
-        .rd_data_even (vga_rd_data_even),
-        .rd_data_odd  (vga_rd_data_odd),
-        .vga_r        (vga_r),
-        .vga_g        (vga_g),
-        .vga_b        (vga_b)
+        .clk     (clk_25mhz),
+        .rst     (rst_25_sync),
+        .hcount  (hcount),
+        .vcount  (vcount),
+        .hactive (hactive),
+        .vactive (vactive),
+        .sw      (sw),
+        .rd_addr (vga_rd_addr),
+        .rd_data (vga_rd_data),
+        .vga_r   (vga_r),
+        .vga_g   (vga_g),
+        .vga_b   (vga_b)
     );
 
 endmodule

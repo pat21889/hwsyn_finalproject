@@ -57,6 +57,10 @@ set_clock_groups -asynchronous \
     -group [get_clocks -of_objects [get_pins u_clk_wiz/u_mmcm/CLKOUT0]] \
     -group [get_clocks cam_pclk_clk]
 
+# PCLK comes from a regular GPIO pin, not a clock-capable pin.
+# Must tell Vivado not to use the dedicated clock routing network.
+set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets cam_pclk_IBUF]
+
 # === VGA Pins (Basys 3 standard VGA DAC) ===
 # Red channel (4 bits)
 set_property PACKAGE_PIN G19 [get_ports {vga_r[0]}]

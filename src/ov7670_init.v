@@ -58,114 +58,106 @@ module ov7670_init (
     // Total entries: 66 registers + 1 end marker
     // The software reset (COM7=0x80) is sent separately before this table.
     //------------------------------------------------------------------------
-    localparam NUM_REGS = 7'd66;  // Number of register entries (excluding end marker)
-
+    localparam NUM_REGS = 7'd72;  // Number of register entries
 
 
     //------------------------------------------------------------------------
     // ROM read: return {addr, data} for given index
+    // Based on proven working reference design register set.
     //------------------------------------------------------------------------
     function [15:0] get_reg_entry;
         input [6:0] index;
         begin
             case (index)
-                // Output format: RGB565
+                // === Core format: RGB565 QVGA ===
                 7'd0:  get_reg_entry = {8'h12, 8'h14}; // COM7: QVGA + RGB mode
-                7'd1:  get_reg_entry = {8'h40, 8'hD0}; // COM15: RGB565 output range
-                7'd2:  get_reg_entry = {8'h8C, 8'h00}; // RGB444: disable RGB444
+                7'd1:  get_reg_entry = {8'h40, 8'hD0}; // COM15: RGB565 output range [00-FF]
+                7'd2:  get_reg_entry = {8'h3A, 8'h04}; // TSLB: normal byte order
+                7'd3:  get_reg_entry = {8'h3D, 8'hC8}; // COM13: gamma enable, UV auto, swap UV
 
-                // Clock
-                7'd3:  get_reg_entry = {8'h11, 8'h80}; // CLKRC: use external clock directly
-                7'd4:  get_reg_entry = {8'h6B, 8'h4A}; // DBLV: PLL x4 // TODO: verify PLL setting
+                // === Clock: NO PLL, use XCLK directly ===
+                7'd4:  get_reg_entry = {8'h11, 8'h80}; // CLKRC: use external clock directly
+                7'd5:  get_reg_entry = {8'h6B, 8'h00}; // DBLV: PLL BYPASS (was 0x4A=4x, caused PCLK too fast!)
+                7'd6:  get_reg_entry = {8'h1E, 8'h31}; // MVFP: mirror + flip
 
-                // Image format and DCW for QVGA
-                7'd5:  get_reg_entry = {8'h0C, 8'h0C}; // COM3: scale enable + DCW enable
-                7'd6:  get_reg_entry = {8'h3E, 8'h19}; // COM14: DCW+scaling PCLK, divider /2 // TODO: verify
-                7'd7:  get_reg_entry = {8'h72, 8'h11}; // SCALING_DCWCTR: H and V downsample by 2
-                7'd8:  get_reg_entry = {8'h73, 8'hF1}; // SCALING_PCLK_DIV: bypass clock divider // TODO: verify
+                // === Framing: QVGA window ===
+                7'd7:  get_reg_entry = {8'h17, 8'h13}; // HSTART
+                7'd8:  get_reg_entry = {8'h18, 8'h01}; // HSTOP
+                7'd9:  get_reg_entry = {8'h32, 8'hB6}; // HREF
+                7'd10: get_reg_entry = {8'h19, 8'h02}; // VSTRT
+                7'd11: get_reg_entry = {8'h1A, 8'h7A}; // VSTOP
+                7'd12: get_reg_entry = {8'h03, 8'h0A}; // VREF
 
-                // Window / framing for QVGA
-                7'd9:  get_reg_entry = {8'h17, 8'h16}; // HSTART
-                7'd10: get_reg_entry = {8'h18, 8'h04}; // HSTOP
-                7'd11: get_reg_entry = {8'h32, 8'hA4}; // HREF
-                7'd12: get_reg_entry = {8'h19, 8'h02}; // VSTRT
-                7'd13: get_reg_entry = {8'h1A, 8'h7A}; // VSTOP
-                7'd14: get_reg_entry = {8'h03, 8'h0A}; // VREF
+                // === Scaling: NO DCW (direct QVGA output) ===
+                7'd13: get_reg_entry = {8'h0C, 8'h00}; // COM3: no scaling (was 0x0C = DCW enabled!)
+                7'd14: get_reg_entry = {8'h3E, 8'h00}; // COM14: no prescaler (was 0x19!)
+                7'd15: get_reg_entry = {8'h70, 8'h00}; // SCALING_XSC: default (was 0x3A)
+                7'd16: get_reg_entry = {8'h71, 8'h00}; // SCALING_YSC: default (was 0x35)
+                7'd17: get_reg_entry = {8'h72, 8'h11}; // SCALING_DCWCTR
+                7'd18: get_reg_entry = {8'h73, 8'h00}; // SCALING_PCLK_DIV (was 0xF1!)
+                7'd19: get_reg_entry = {8'hA2, 8'h02}; // SCALING_PCLK_DELAY
 
-                // Pixel clock options
-                7'd15: get_reg_entry = {8'h15, 8'h00}; // COM10: PCLK always toggles (Required for edge detection)
+                // === Pixel clock ===
+                7'd20: get_reg_entry = {8'h15, 8'h00}; // COM10: PCLK always toggles
 
-                // Disable test pattern
-                7'd16: get_reg_entry = {8'h70, 8'h3A}; // SCALING_XSC: test_pattern[0]=0
-                7'd17: get_reg_entry = {8'h71, 8'h35}; // SCALING_YSC: test_pattern[1]=0
+                // === Gamma curve (from reference) ===
+                7'd21: get_reg_entry = {8'h7A, 8'h20}; // SLOP
+                7'd22: get_reg_entry = {8'h7B, 8'h1C}; // GAM1
+                7'd23: get_reg_entry = {8'h7C, 8'h28}; // GAM2
+                7'd24: get_reg_entry = {8'h7D, 8'h3C}; // GAM3
+                7'd25: get_reg_entry = {8'h7E, 8'h55}; // GAM4
+                7'd26: get_reg_entry = {8'h7F, 8'h68}; // GAM5
+                7'd27: get_reg_entry = {8'h80, 8'h76}; // GAM6
+                7'd28: get_reg_entry = {8'h81, 8'h80}; // GAM7
+                7'd29: get_reg_entry = {8'h82, 8'h88}; // GAM8
+                7'd30: get_reg_entry = {8'h83, 8'h8F}; // GAM9
+                7'd31: get_reg_entry = {8'h84, 8'h96}; // GAM10
+                7'd32: get_reg_entry = {8'h85, 8'hA3}; // GAM11
+                7'd33: get_reg_entry = {8'h86, 8'hAF}; // GAM12
+                7'd34: get_reg_entry = {8'h87, 8'hC4}; // GAM13
+                7'd35: get_reg_entry = {8'h88, 8'hD7}; // GAM14
+                7'd36: get_reg_entry = {8'h89, 8'hE8}; // GAM15
 
-                // Color matrix for RGB
-                7'd18: get_reg_entry = {8'h4F, 8'h40}; // MTX1
-                7'd19: get_reg_entry = {8'h50, 8'h34}; // MTX2
-                7'd20: get_reg_entry = {8'h51, 8'h0C}; // MTX3
-                7'd21: get_reg_entry = {8'h52, 8'h17}; // MTX4
-                7'd22: get_reg_entry = {8'h53, 8'h29}; // MTX5
-                7'd23: get_reg_entry = {8'h54, 8'h40}; // MTX6
-                7'd24: get_reg_entry = {8'h58, 8'h1E}; // MTXS
+                // === AGC / AEC / AWB (from reference) ===
+                7'd37: get_reg_entry = {8'h13, 8'hE0}; // COM8: disable AGC/AWB/AEC first
+                7'd38: get_reg_entry = {8'h00, 8'h00}; // GAIN
+                7'd39: get_reg_entry = {8'h10, 8'h00}; // AECH
+                7'd40: get_reg_entry = {8'h0D, 8'h00}; // COM4
+                7'd41: get_reg_entry = {8'h14, 8'h28}; // COM9: 4x AGC ceiling
+                7'd42: get_reg_entry = {8'hA5, 8'h05}; // BD50MAX
+                7'd43: get_reg_entry = {8'hAB, 8'h07}; // BD60MAX
+                7'd44: get_reg_entry = {8'h24, 8'h75}; // AEW: AGC/AEC stable upper limit
+                7'd45: get_reg_entry = {8'h25, 8'h63}; // AEB: AGC/AEC stable lower limit
+                7'd46: get_reg_entry = {8'h26, 8'hA5}; // VPT: fast mode operating region
+                7'd47: get_reg_entry = {8'h9F, 8'h78}; // HAECC1
+                7'd48: get_reg_entry = {8'hA0, 8'h68}; // HAECC2
+                7'd49: get_reg_entry = {8'hA1, 8'h03}; // Magic
+                7'd50: get_reg_entry = {8'hA6, 8'hDF}; // HAECC3
+                7'd51: get_reg_entry = {8'hA7, 8'hDF}; // HAECC4
+                7'd52: get_reg_entry = {8'hA8, 8'hF0}; // HAECC5
+                7'd53: get_reg_entry = {8'hA9, 8'h90}; // HAECC6
+                7'd54: get_reg_entry = {8'hAA, 8'h94}; // HAECC7
+                7'd55: get_reg_entry = {8'h13, 8'hEF}; // COM8: re-enable AGC/AWB (not AEC)
+                7'd56: get_reg_entry = {8'h0E, 8'h61}; // COM5
+                7'd57: get_reg_entry = {8'h0F, 8'h4B}; // COM6
+                7'd58: get_reg_entry = {8'h16, 8'h02}; // Reserved
 
-                // AGC / AEC / AWB
-                7'd25: get_reg_entry = {8'h13, 8'hE7}; // COM8: fast AGC, AEC, banding, AGC+AWB+AEC
-                7'd26: get_reg_entry = {8'h00, 8'h00}; // GAIN: AGC gain = 0
-                7'd27: get_reg_entry = {8'h10, 8'h40}; // AECH: exposure // TODO: verify
-                7'd28: get_reg_entry = {8'h01, 8'h80}; // BLUE: AWB blue gain
-                7'd29: get_reg_entry = {8'h02, 8'h80}; // RED: AWB red gain
-                7'd30: get_reg_entry = {8'h0E, 8'h01}; // COM5: reserved default // TODO: verify
-                7'd31: get_reg_entry = {8'h0F, 8'h4B}; // COM6: reset timing on format change
+                // === Color matrix (from reference) ===
+                7'd59: get_reg_entry = {8'h4F, 8'h80}; // MTX1
+                7'd60: get_reg_entry = {8'h50, 8'h80}; // MTX2
+                7'd61: get_reg_entry = {8'h51, 8'h00}; // MTX3
+                7'd62: get_reg_entry = {8'h52, 8'h22}; // MTX4
+                7'd63: get_reg_entry = {8'h53, 8'h5E}; // MTX5
+                7'd64: get_reg_entry = {8'h54, 8'h80}; // MTX6
+                7'd65: get_reg_entry = {8'h58, 8'h9E}; // MTXS
 
-                // Gamma curve
-                7'd32: get_reg_entry = {8'h7A, 8'h24}; // SLOP
-                7'd33: get_reg_entry = {8'h7B, 8'h04}; // GAM1
-                7'd34: get_reg_entry = {8'h7C, 8'h07}; // GAM2
-                7'd35: get_reg_entry = {8'h7D, 8'h10}; // GAM3
-                7'd36: get_reg_entry = {8'h7E, 8'h28}; // GAM4
-                7'd37: get_reg_entry = {8'h7F, 8'h36}; // GAM5
-                7'd38: get_reg_entry = {8'h80, 8'h44}; // GAM6
-                7'd39: get_reg_entry = {8'h81, 8'h52}; // GAM7
-                7'd40: get_reg_entry = {8'h82, 8'h60}; // GAM8
-                7'd41: get_reg_entry = {8'h83, 8'h6C}; // GAM9
-                7'd42: get_reg_entry = {8'h84, 8'h78}; // GAM10
-                7'd43: get_reg_entry = {8'h85, 8'h8C}; // GAM11
-                7'd44: get_reg_entry = {8'h86, 8'h9E}; // GAM12
-                7'd45: get_reg_entry = {8'h87, 8'hBB}; // GAM13
-                7'd46: get_reg_entry = {8'h88, 8'hD2}; // GAM14
-                7'd47: get_reg_entry = {8'h89, 8'hE5}; // GAM15
-
-                // AWB advanced
-                7'd48: get_reg_entry = {8'h6C, 8'h02}; // AWBCTR3
-                7'd49: get_reg_entry = {8'h6D, 8'h55}; // AWBCTR2
-                7'd50: get_reg_entry = {8'h6E, 8'hC0}; // AWBCTR1
-                7'd51: get_reg_entry = {8'h6F, 8'h9A}; // AWBCTR0
-
-                // Lens correction off
-                7'd52: get_reg_entry = {8'h66, 8'h00}; // LCC5: lens correction disable
-
-                // De-noise and edge
-                7'd53: get_reg_entry = {8'h4C, 8'h00}; // DNSTH
-                7'd54: get_reg_entry = {8'h3F, 8'h00}; // EDGE
-                7'd55: get_reg_entry = {8'h41, 8'h08}; // COM16: default
-
-                // UV / saturation
-                7'd56: get_reg_entry = {8'h3D, 8'h88}; // COM13: gamma enable, UV auto adjust
-                7'd57: get_reg_entry = {8'h3A, 8'h04}; // TSLB: YUYV sequence, auto window off
-
-                // Banding filter (50Hz for Thailand)
-                7'd58: get_reg_entry = {8'h3B, 8'h0A}; // COM11: 50Hz auto detect + banding ON
-                7'd59: get_reg_entry = {8'h9D, 8'h99}; // BD50ST: 50Hz banding value // TODO: verify
-                7'd60: get_reg_entry = {8'hA5, 8'h0F}; // BD50MAX // TODO: verify
-
-                // Histogram AEC
-                7'd61: get_reg_entry = {8'hAA, 8'h94}; // HAECC7: histogram-based AEC // TODO: verify
-
-                // Additional recommended settings
-                7'd62: get_reg_entry = {8'hB0, 8'h84}; // UNDOC: recommended by app note // TODO: verify
-                7'd63: get_reg_entry = {8'hB1, 8'h0C}; // ABLC1: auto black level compensation
-                7'd64: get_reg_entry = {8'hB2, 8'h0E}; // UNDOC: recommended // TODO: verify
-                7'd65: get_reg_entry = {8'hB3, 8'h80}; // THL_ST: ABLC target // TODO: verify
+                // === AWB (from reference) ===
+                7'd66: get_reg_entry = {8'h6C, 8'h0A}; // AWBCTR3
+                7'd67: get_reg_entry = {8'h6D, 8'h55}; // AWBCTR2
+                7'd68: get_reg_entry = {8'h6E, 8'h11}; // AWBCTR1
+                7'd69: get_reg_entry = {8'h6F, 8'h9F}; // AWBCTR0
+                7'd70: get_reg_entry = {8'h01, 8'h40}; // BLUE gain
+                7'd71: get_reg_entry = {8'h02, 8'h40}; // RED gain
 
                 default: get_reg_entry = {8'hFF, 8'hFF}; // End marker
             endcase
