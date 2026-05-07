@@ -82,7 +82,7 @@ module ov7670_init (
                 7'd5:  get_reg_entry = {8'h0C, 8'h0C}; // COM3: scale enable + DCW enable
                 7'd6:  get_reg_entry = {8'h3E, 8'h19}; // COM14: DCW+scaling PCLK, divider /2 // TODO: verify
                 7'd7:  get_reg_entry = {8'h72, 8'h11}; // SCALING_DCWCTR: H and V downsample by 2
-                7'd8:  get_reg_entry = {8'h73, 8'hF1}; // SCALING_PCLK_DIV: bypass clock divider // TODO: verify
+                7'd8:  get_reg_entry = {8'h73, 8'hF0}; // SCALING_PCLK_DIV: bypass PCLK divider (bit3=0 = bypass ON)
 
                 // Window / framing for QVGA
                 7'd9:  get_reg_entry = {8'h17, 8'h16}; // HSTART

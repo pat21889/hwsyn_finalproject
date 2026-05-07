@@ -101,14 +101,16 @@ module vga_display (
     reg [11:0] p_bot_prev;
 
     always @(posedge clk) begin
-        if (hcount_d == 10'd0) begin
-            // Reset at start of line
-            p_top_prev <= p_top_curr;
-            p_bot_prev <= p_bot_curr;
-        end else begin
+        if (rst) begin
+            p_top_prev <= 12'd0;
+            p_bot_prev <= 12'd0;
+        end else if (!h_interp) begin
+            // Latch current pixel as "previous" only on even (non-interpolated) columns
+            // so the next odd column can average [prev, curr]
             p_top_prev <= p_top_curr;
             p_bot_prev <= p_bot_curr;
         end
+        // On odd (interpolated) columns, hold p_prev unchanged
     end
 
     // Averaging function for RGB444 pixels
