@@ -23,3 +23,6 @@ Final_Project.sim/
 # OS files
 Thumbs.db
 .DS_Store
+
+# Project specific
+src_for_project/
