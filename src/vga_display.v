@@ -56,19 +56,16 @@ module vga_display (
     wire [8:0] cam_x = hcount[9:1]; // 0..319
     wire [7:0] cam_y = vcount[9:1]; // 0..239
 
-    // For rotation 90 CW:
-    //   src_row = cam_x  (which row of camera data to read)
-    //   src_col = 319 - cam_y (which column)
-    // Valid display region: cam_x must be < 240 (camera has 240 rows)
-    // Clamp cam_x to 239 for addressing safety
-    wire [8:0] src_row = (cam_x >= 9'd240) ? 9'd239 : cam_x;
-    wire [8:0] src_col = 9'd319 - {1'b0, cam_y};
+    // For standard landscape display (no rotation):
+    // Valid display region: 320x240, which upscaled is 640x480.
+    wire [8:0] src_row = {1'b0, cam_y};
+    wire [8:0] src_col = cam_x;
 
     // Previous row/col for bilinear neighbor access
-    // "Previous" in horizontal scan = src_row - 1 (since src_row increases with hcount)
+    // "Previous" in horizontal scan = src_col - 1 (since src_col increases with hcount)
+    wire [8:0] src_col_prev = (src_col == 0) ? 9'd0 : (src_col - 9'd1);
+    // "Previous" in vertical scan = src_row - 1 (since src_row increases with vcount)
     wire [8:0] src_row_prev = (src_row == 0) ? 9'd0 : (src_row - 9'd1);
-    // "Previous" in vertical scan = src_col + 1 (since src_col decreases with vcount)
-    wire [8:0] src_col_prev = (src_col >= 9'd319) ? 9'd319 : (src_col + 9'd1);
 
     // Multiply helpers: row * 320 = row * 256 + row * 64
     // src_row max = 239, so 8 bits is sufficient
@@ -222,22 +219,9 @@ module vga_display (
         end
     end
 
-    // Rotated image is 240 source cols → 480 VGA pixels wide.
-    // cam_x > 239 is out of valid source range → black.
-    reg [9:0] hcount_d1, hcount_d2, hcount_d3;
-    always @(posedge clk) begin
-        if (rst) begin
-            hcount_d1 <= 10'd0;
-            hcount_d2 <= 10'd0;
-            hcount_d3 <= 10'd0;
-        end else begin
-            hcount_d1 <= hcount;
-            hcount_d2 <= hcount_d1;
-            hcount_d3 <= hcount_d2;
-        end
-    end
-    wire out_in_range = (hcount_d3 < 10'd480);
-    wire out_valid = hactive_pipe[3] && vactive_pipe[3] && out_in_range;
+    // Standard full-screen upscaled image (640x480).
+    // The active VGA region perfectly matches the upscaled camera data.
+    wire out_valid = hactive_pipe[3] && vactive_pipe[3];
 
     always @(posedge clk) begin
         if (rst) begin

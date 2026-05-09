@@ -26,3 +26,5 @@ Thumbs.db
 
 # Project specific
 src_for_project/
+OV7670_Research_Report.md
+src/ov7670_init_backup.v

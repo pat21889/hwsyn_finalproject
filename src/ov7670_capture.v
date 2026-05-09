@@ -33,10 +33,8 @@ module ov7670_capture (
             wr_hold <= 0;
             we      <= 0;
         end else begin
-            // Shift in data bytes — reverse order to test byte swap fix
-            // If camera sends byte1=GGGG_BBBB first, byte2=0000_RRRR second:
-            // d_latch = {byte2, byte1} = {0000_RRRR, GGGG_BBBB}
-            d_latch <= {d, d_latch[15:8]};
+            // Shift in data bytes (always, every PCLK)
+            d_latch <= {d_latch[7:0], d};
 
             // wr_hold is a 2-stage pipeline that toggles every other clock
             // when href is high, creating a write pulse every 2 PCLKs
@@ -46,9 +44,13 @@ module ov7670_capture (
             we <= wr_hold[1];
 
             if (wr_hold[1]) begin
-                // RGB444 Native: d_latch = {0000_RRRR, GGGG_BBBB}
-                // d_latch[11:0] = {R[3:0], G[3:0], B[3:0]}
-                dout_reg <= d_latch[11:0];
+                // RGB565 → RGB444 format extraction
+                // d_latch = {R4 R3 R2 R1 R0 G5 G4 G3, G2 G1 G0 B4 B3 B2 B1 B0}
+                dout_reg <= {
+                    d_latch[15:12],   // R[4:1]
+                    d_latch[10:7],    // G[5:2]
+                    d_latch[4:1]      // B[4:1]
+                };
 
                 // Increment position (row-major order)
                 if (x < 319) begin
