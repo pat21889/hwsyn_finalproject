@@ -104,25 +104,39 @@ module top (
     assign cam_scl  = sccb_scl;
 
     //------------------------------------------------------------------------
-    // VGA sync delay: 2 cycles to match display pipeline latency
+    // VGA sync delay: 4 cycles to match bilinear display pipeline latency
+    //   Cycle 1: BRAM address generated
+    //   Cycle 2: BRAM data returned
+    //   Cycle 3: Pixel cache updated
+    //   Cycle 4: VGA output register
     //------------------------------------------------------------------------
     reg hsync_d1, vsync_d1;
     reg hsync_d2, vsync_d2;
+    reg hsync_d3, vsync_d3;
+    reg hsync_d4, vsync_d4;
     always @(posedge clk_25mhz) begin
         if (rst_25_sync) begin
             hsync_d1 <= 1'b1;
             vsync_d1 <= 1'b1;
             hsync_d2 <= 1'b1;
             vsync_d2 <= 1'b1;
+            hsync_d3 <= 1'b1;
+            vsync_d3 <= 1'b1;
+            hsync_d4 <= 1'b1;
+            vsync_d4 <= 1'b1;
         end else begin
             hsync_d1 <= hsync_wire;
             vsync_d1 <= vsync_wire;
             hsync_d2 <= hsync_d1;
             vsync_d2 <= vsync_d1;
+            hsync_d3 <= hsync_d2;
+            vsync_d3 <= vsync_d2;
+            hsync_d4 <= hsync_d3;
+            vsync_d4 <= vsync_d3;
         end
     end
-    assign vga_hsync = hsync_d2;
-    assign vga_vsync = vsync_d2;
+    assign vga_hsync = hsync_d4;
+    assign vga_vsync = vsync_d4;
 
     //========================================================================
     // Hardware Debugging (LEDs)

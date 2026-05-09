@@ -102,10 +102,10 @@ module tb_top;
             for (row = 0; row < 5; row = row + 1) begin
                 cam_href = 1;
                 for (col = 0; col < 320; col = col + 1) begin
-                    // Byte 1 of RGB565
+                    // Byte 1 of RGB565: {R[4:0], G[5:3]}
                     cam_d = {col[4:0], row[2:0]};
                     @(negedge cam_pclk);
-                    // Byte 2 of RGB565
+                    // Byte 2 of RGB565: {G[2:0], B[4:0]}
                     cam_d = {row[2:0], col[4:0]};
                     @(negedge cam_pclk);
                 end

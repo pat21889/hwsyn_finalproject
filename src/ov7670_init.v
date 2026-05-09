@@ -58,7 +58,7 @@ module ov7670_init (
     // Total entries: 66 registers + 1 end marker
     // The software reset (COM7=0x80) is sent separately before this table.
     //------------------------------------------------------------------------
-    localparam NUM_REGS = 7'd72;  // Number of register entries
+    localparam NUM_REGS = 7'd73;  // Number of register entries
 
 
     //------------------------------------------------------------------------
@@ -71,7 +71,7 @@ module ov7670_init (
             case (index)
                 // === Core format: RGB565 QVGA ===
                 7'd0:  get_reg_entry = {8'h12, 8'h14}; // COM7: QVGA + RGB mode
-                7'd1:  get_reg_entry = {8'h40, 8'hD0}; // COM15: RGB565 output range [00-FF]
+                7'd1:  get_reg_entry = {8'h40, 8'hD0}; // COM15: RGB output, full range [00-FF]
                 7'd2:  get_reg_entry = {8'h3A, 8'h04}; // TSLB: normal byte order
                 7'd3:  get_reg_entry = {8'h3D, 8'hC8}; // COM13: gamma enable, UV auto, swap UV
 
@@ -158,6 +158,9 @@ module ov7670_init (
                 7'd69: get_reg_entry = {8'h6F, 8'h9F}; // AWBCTR0
                 7'd70: get_reg_entry = {8'h01, 8'h40}; // BLUE gain
                 7'd71: get_reg_entry = {8'h02, 8'h40}; // RED gain
+
+                // === RGB444 enable ===
+                7'd72: get_reg_entry = {8'h8C, 8'h02}; // RGB444: enable RGB444 (xRGB format)
 
                 default: get_reg_entry = {8'hFF, 8'hFF}; // End marker
             endcase

@@ -6,9 +6,9 @@
 //
 //              Checks:
 //              - Correct byte-pairing (two bytes → one RGB565 pixel)
-//              - RGB565 → RGB444 downsampling correctness
+//              - RGB565 → RGB444 conversion correctness
 //              - Write address increments per pixel
-//              - Write address resets on VSYNC rising edge
+//              - Write address resets on VSYNC level-high
 //============================================================================
 
 `timescale 1ns / 1ps
@@ -19,26 +19,25 @@ module tb_ov7670_capture;
     // Testbench signals
     //------------------------------------------------------------------------
     reg        pclk;
-    reg        rst;
     reg        href;
     reg        vsync;
     reg  [7:0] d;
-    wire [16:0] wr_addr;
-    wire [11:0] wr_data;
-    wire        wr_en;
+    wire [16:0] wr_addr;  // maps to 'addr' port
+    wire [11:0] wr_data;  // maps to 'dout' port
+    wire        wr_en;    // maps to 'we' port
 
     //------------------------------------------------------------------------
     // DUT instantiation
+    // Note: port names match ov7670_capture exactly (addr/dout/we)
     //------------------------------------------------------------------------
     ov7670_capture uut (
-        .pclk    (pclk),
-        .rst     (rst),
-        .href    (href),
-        .vsync   (vsync),
-        .d       (d),
-        .wr_addr (wr_addr),
-        .wr_data (wr_data),
-        .wr_en   (wr_en)
+        .pclk  (pclk),
+        .href  (href),
+        .vsync (vsync),
+        .d     (d),
+        .addr  (wr_addr),
+        .dout  (wr_data),
+        .we    (wr_en)
     );
 
     //------------------------------------------------------------------------
@@ -73,7 +72,7 @@ module tb_ov7670_capture;
         begin
             // Byte 1: {R[4:0], G[5:3]}
             d = {r5, g6[5:3]};
-            @(negedge pclk); // Wait for falling edge
+            @(negedge pclk);
 
             // Byte 2: {G[2:0], B[4:0]}
             d = {g6[2:0], b5};
@@ -103,18 +102,15 @@ module tb_ov7670_capture;
     // Test stimulus
     //------------------------------------------------------------------------
     initial begin
-        $display("=== OV7670 Capture Testbench ===");
+        $display("=== OV7670 Capture Testbench (RGB565 Mode) ===");
 
-        // Initialize
-        rst   = 1;
+        // Initialize (no external reset — module resets on vsync level)
         href  = 0;
         vsync = 0;
         d     = 8'h00;
 
-        // Hold reset
+        // Brief idle
         repeat (5) @(negedge pclk);
-        rst = 0;
-        repeat (2) @(negedge pclk);
 
         //--------------------------------------------------------------------
         // Test 1: VSYNC pulse (frame start)
@@ -161,7 +157,7 @@ module tb_ov7670_capture;
         $display("Address after VSYNC should start from 0");
 
         //--------------------------------------------------------------------
-        // Test 5: Verify specific RGB565 → RGB444 conversion
+        // Test 5: Verify RGB565 -> RGB444 conversion
         //--------------------------------------------------------------------
         $display("\n--- Test 5: RGB565 to RGB444 Conversion ---");
         vsync = 1;
@@ -169,23 +165,16 @@ module tb_ov7670_capture;
         vsync = 0;
         repeat (3) @(negedge pclk);
 
-        // Send known pixel: R=31 (0x1F), G=63 (0x3F), B=31 (0x1F) = full white
-        // byte1 = {5'b11111, 3'b111} = 8'hFF
-        // byte2 = {3'b111, 5'b11111} = 8'hFF
-        // Expected RGB444: R=F, G=F, B=F = 0xFFF
         href = 1;
+        // White: R=31, G=63, B=31 -> expect RGB444 = 0xFFF
         $display("Sending white pixel (R=31, G=63, B=31)...");
         send_pixel(5'd31, 6'd63, 5'd31);
 
-        // Send known pixel: R=0, G=0, B=0 = full black
-        // Expected RGB444: R=0, G=0, B=0 = 0x000
+        // Black: R=0, G=0, B=0 -> expect RGB444 = 0x000
         $display("Sending black pixel (R=0, G=0, B=0)...");
         send_pixel(5'd0, 6'd0, 5'd0);
 
-        // Send known pixel: R=16, G=32, B=8
-        // byte1 = {5'b10000, 3'b100} = 8'h84
-        // byte2 = {3'b000, 5'b01000} = 8'h08
-        // RGB444: R=10000>>1=1000=0x8, G=100000>>2=1000=0x8, B=01000>>1=0100=0x4
+        // Test: R=16, G=32, B=8 -> expect R=8, G=8, B=4 = 0x884
         $display("Sending test pixel (R=16, G=32, B=8)...");
         send_pixel(5'd16, 6'd32, 5'd8);
         href = 0;
