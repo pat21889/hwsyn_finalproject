@@ -101,13 +101,14 @@ module tb_sccb_master;
         // Wait for done signal
         wait (done == 1);
         $display("[%0t] Transaction DONE!", $time);
-        $display("Total SCL rising edges: %0d (expected 27: 3 phases x 9 bits)", scl_rising_count);
+        $display("Total SCL rising edges: %0d (expected 28: 3x9 data + 1 STOP)", scl_rising_count);
 
         // Verify expected number of SCL edges
-        if (scl_rising_count == 27)
+        // 3 phases x 9 bits = 27, plus 1 extra rising edge in the STOP condition = 28 total
+        if (scl_rising_count == 28)
             $display("PASS: Correct number of SCL clock cycles");
         else
-            $display("FAIL: Expected 27 SCL rising edges, got %0d", scl_rising_count);
+            $display("FAIL: Expected 28 SCL rising edges, got %0d", scl_rising_count);
 
         // Wait a bit and do a second transaction with different data
         #10000;

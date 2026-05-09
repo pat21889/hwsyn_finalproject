@@ -43,7 +43,7 @@ set_property PULLUP true [get_ports cam_sda]
 
 # === Camera PCLK as input clock ===
 # OV7670 PCLK is typically ~24MHz (period ~41.667ns)
-create_clock -period 41.667 -name cam_pclk_clk [get_ports cam_pclk]
+create_clock -period 40.000 -name cam_pclk_clk [get_ports cam_pclk]
 
 # === Clock Domain Crossing ===
 # PCLK and sys_clk/VGA clocks are asynchronous
