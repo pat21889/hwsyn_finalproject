@@ -2,11 +2,11 @@
 // Testbench: tb_ov7670_capture
 // Description: Verifies the OV7670 pixel capture module.
 //              Simulates PCLK, HREF, VSYNC, and D[7:0] to mimic OV7670
-//              RGB565 output.
+//              xRGB444 output (register 0x8C=0x02).
 //
 //              Checks:
-//              - Correct byte-pairing (two bytes → one RGB565 pixel)
-//              - RGB565 → RGB444 conversion correctness
+//              - Correct byte-pairing (two bytes → one RGB444 pixel)
+//              - RGB444 latch extraction correctness (d_latch[11:0])
 //              - Write address increments per pixel
 //              - Write address resets on VSYNC level-high
 //============================================================================
@@ -56,26 +56,29 @@ module tb_ov7670_capture;
             $display("[%0t] Pixel %0d: addr=%0d, data=0x%03h (R=%01h G=%01h B=%01h)",
                      $time, pixel_count, wr_addr, wr_data,
                      wr_data[11:8], wr_data[7:4], wr_data[3:0]);
-            pixel_count <= pixel_count + 1;
+            pixel_count = pixel_count + 1;
         end
     end
 
     //------------------------------------------------------------------------
-    // Task: Send one RGB565 pixel (2 bytes on consecutive PCLK cycles)
-    // byte1 = {R[4:0], G[5:3]}
-    // byte2 = {G[2:0], B[4:0]}
+    // Task: Send one RGB444 pixel (2 bytes on consecutive PCLK cycles)
+    // The capture module expects xRGB444 byte order as determined empirically:
+    //   byte1 = {G[3:0], B[3:0]}   (GGGG_BBBB)
+    //   byte2 = {4'b0000, R[3:0]}  (0000_RRRR)
+    // After the 2-byte shift: d_latch = {0000_RRRR, GGGG_BBBB}
+    //   d_latch[11:0] = {R[3:0], G[3:0], B[3:0]} (correct RGB444)
     //------------------------------------------------------------------------
     task send_pixel;
-        input [4:0] r5;  // 5-bit red
-        input [5:0] g6;  // 6-bit green
-        input [4:0] b5;  // 5-bit blue
+        input [3:0] r4;  // 4-bit red
+        input [3:0] g4;  // 4-bit green
+        input [3:0] b4;  // 4-bit blue
         begin
-            // Byte 1: {R[4:0], G[5:3]}
-            d = {r5, g6[5:3]};
+            // Byte 1: GGGG_BBBB
+            d = {g4, b4};
             @(negedge pclk);
 
-            // Byte 2: {G[2:0], B[4:0]}
-            d = {g6[2:0], b5};
+            // Byte 2: 0000_RRRR
+            d = {4'b0000, r4};
             @(negedge pclk);
         end
     endtask
@@ -89,8 +92,8 @@ module tb_ov7670_capture;
         begin
             href = 1;
             for (i = 0; i < num_pixels; i = i + 1) begin
-                // Send pixel with incrementing values for easy verification
-                send_pixel(i[4:0], i[5:0], i[4:0]);
+                // Send pixel with incrementing 4-bit values for easy verification
+                send_pixel(i[3:0], i[3:0], i[3:0]);
             end
             href = 0;
             // Horizontal blanking (a few PCLK cycles)
@@ -157,26 +160,26 @@ module tb_ov7670_capture;
         $display("Address after VSYNC should start from 0");
 
         //--------------------------------------------------------------------
-        // Test 5: Verify RGB565 -> RGB444 conversion
+        // Test 5: Verify RGB444 byte-pair -> pixel conversion
         //--------------------------------------------------------------------
-        $display("\n--- Test 5: RGB565 to RGB444 Conversion ---");
+        $display("\n--- Test 5: RGB444 Capture Conversion ---");
         vsync = 1;
         repeat (3) @(negedge pclk);
         vsync = 0;
         repeat (3) @(negedge pclk);
 
         href = 1;
-        // White: R=31, G=63, B=31 -> expect RGB444 = 0xFFF
-        $display("Sending white pixel (R=31, G=63, B=31)...");
-        send_pixel(5'd31, 6'd63, 5'd31);
+        // White: R=15, G=15, B=15 -> expect RGB444 dout = 0xFFF
+        $display("Sending white pixel (R=15, G=15, B=15)...");
+        send_pixel(4'd15, 4'd15, 4'd15);
 
-        // Black: R=0, G=0, B=0 -> expect RGB444 = 0x000
+        // Black: R=0, G=0, B=0 -> expect RGB444 dout = 0x000
         $display("Sending black pixel (R=0, G=0, B=0)...");
-        send_pixel(5'd0, 6'd0, 5'd0);
+        send_pixel(4'd0, 4'd0, 4'd0);
 
-        // Test: R=16, G=32, B=8 -> expect R=8, G=8, B=4 = 0x884
-        $display("Sending test pixel (R=16, G=32, B=8)...");
-        send_pixel(5'd16, 6'd32, 5'd8);
+        // Mid: R=8, G=4, B=12 -> expect RGB444 dout = 0x84C
+        $display("Sending test pixel (R=8, G=4, B=12) -> expect 0x84C...");
+        send_pixel(4'd8, 4'd4, 4'd12);
         href = 0;
 
         repeat (20) @(negedge pclk);
