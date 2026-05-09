@@ -17,21 +17,23 @@ module ov7670_capture (
     reg [15:0] d_latch;
     reg [11:0] dout_reg;
     reg [1:0]  wr_hold;
+    reg [16:0] addr_reg;  // Registered addr: captures x,y before increment to avoid 1-pixel offset
 
     // X/Y coordinates
     reg [9:0] x;
     reg [9:0] y;
 
-    assign addr = y * 320 + x;
+    assign addr = addr_reg;
     assign dout = dout_reg;
 
     always @(posedge pclk) begin
         if (vsync) begin
             // During VSYNC high: continuously reset (level-sensitive, NOT edge)
-            x       <= 0;
-            y       <= 0;
-            wr_hold <= 0;
-            we      <= 0;
+            x        <= 0;
+            y        <= 0;
+            wr_hold  <= 0;
+            we       <= 0;
+            addr_reg <= 0;
         end else begin
             // Shift in data bytes (always, every PCLK)
             d_latch <= {d_latch[7:0], d};
@@ -44,6 +46,9 @@ module ov7670_capture (
             we <= wr_hold[1];
 
             if (wr_hold[1]) begin
+                // Capture address BEFORE x/y increment (non-blocking reads pre-posedge value)
+                addr_reg <= y * 320 + x;
+
                 // RGB565 → RGB444 format extraction
                 // d_latch = {R4 R3 R2 R1 R0 G5 G4 G3, G2 G1 G0 B4 B3 B2 B1 B0}
                 dout_reg <= {

@@ -57,7 +57,7 @@ module ov7670_init (
             case (index)
                 // === Core format: RGB565 QVGA ===
                 7'd0:  get_reg_entry = {8'h12, 8'h14}; // COM7: QVGA + RGB mode
-                7'd1:  get_reg_entry = {8'h40, 8'hC0}; // COM15: full range [00-FF], no RGB565 (RGB444 via 0x8C)
+                7'd1:  get_reg_entry = {8'h40, 8'hD0}; // COM15: full range [00-FF], RGB565 (bit4=1 enables RGB565)
                 7'd2:  get_reg_entry = {8'h3A, 8'h04}; // TSLB: normal byte order
                 7'd3:  get_reg_entry = {8'h3D, 8'hC0}; // COM13: gamma enable, UV auto, DO NOT swap UV
                 7'd4:  get_reg_entry = {8'h8C, 8'h00}; // RGB444: Disable RGB444, ensure RGB565

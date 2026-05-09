@@ -35,7 +35,7 @@ module sccb_master (
     // tCYC = 10us -> need 1000 system clocks per SCL period
     // Half-period = 500 clocks
     //------------------------------------------------------------------------
-    localparam CLK_DIV = 10'd500;   // Half-period count (5us each half)
+    localparam CLK_DIV = 10'd1000;  // Half-period count (10us each half = 50kHz SCL)
     localparam DEVICE_ADDR = 8'h42; // OV7670 write address (7'h21 + W=0)
 
     //------------------------------------------------------------------------

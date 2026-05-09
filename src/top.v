@@ -104,15 +104,17 @@ module top (
     assign cam_scl  = sccb_scl;
 
     //------------------------------------------------------------------------
-    // VGA sync delay: 3 cycles to match bilinear display pipeline latency
-    //   Cycle 1: BRAM data returned  (bram_d1 register in vga_display)
-    //   Cycle 2: Pixel cache updated (p_curr register in vga_display)
-    //   Cycle 3: VGA output register (vga_r/g/b register in vga_display)
+    // VGA sync delay: 4 cycles to match pixel pipeline latency
+    //   Cycle 1: frame_buffer dout_b register (synchronous BRAM read)
+    //   Cycle 2: bram_d1 register in vga_display
+    //   Cycle 3: p_curr pixel cache register in vga_display
+    //   Cycle 4: VGA output register (vga_r/g/b)
     // rd_addr is combinational so it does not add a cycle.
     //------------------------------------------------------------------------
     reg hsync_d1, vsync_d1;
     reg hsync_d2, vsync_d2;
     reg hsync_d3, vsync_d3;
+    reg hsync_d4, vsync_d4;
     always @(posedge clk_25mhz) begin
         if (rst_25_sync) begin
             hsync_d1 <= 1'b1;
@@ -121,6 +123,8 @@ module top (
             vsync_d2 <= 1'b1;
             hsync_d3 <= 1'b1;
             vsync_d3 <= 1'b1;
+            hsync_d4 <= 1'b1;
+            vsync_d4 <= 1'b1;
         end else begin
             hsync_d1 <= hsync_wire;
             vsync_d1 <= vsync_wire;
@@ -128,10 +132,12 @@ module top (
             vsync_d2 <= vsync_d1;
             hsync_d3 <= hsync_d2;
             vsync_d3 <= vsync_d2;
+            hsync_d4 <= hsync_d3;
+            vsync_d4 <= vsync_d3;
         end
     end
-    assign vga_hsync = hsync_d3;
-    assign vga_vsync = vsync_d3;
+    assign vga_hsync = hsync_d4;
+    assign vga_vsync = vsync_d4;
 
     //========================================================================
     // Hardware Debugging (LEDs)

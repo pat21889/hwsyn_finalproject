@@ -59,7 +59,7 @@ set_clock_groups -asynchronous \
 
 # PCLK comes from a regular GPIO pin, not a clock-capable pin.
 # Must tell Vivado not to use the dedicated clock routing network.
-set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets cam_pclk_IBUF]
+set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets -hierarchical -filter {NAME =~ *cam_pclk*}]
 
 # === VGA Pins (Basys 3 standard VGA DAC) ===
 # Red channel (4 bits)

@@ -219,9 +219,24 @@ module vga_display (
         end
     end
 
-    // Standard full-screen upscaled image (640x480).
-    // The active VGA region perfectly matches the upscaled camera data.
     wire out_valid = hactive_pipe[3] && vactive_pipe[3];
+
+    // Diagnostic color bar test pattern (bypasses camera/BRAM entirely).
+    // Activated when sw=2'b11. Shows R|G|B|W vertical bars.
+    // If bars appear with correct colors, display pipeline is confirmed working.
+    reg [9:0] hcount_d1, hcount_d2, hcount_d3, hcount_d4;
+    always @(posedge clk) begin
+        hcount_d1 <= hcount;
+        hcount_d2 <= hcount_d1;
+        hcount_d3 <= hcount_d2;
+        hcount_d4 <= hcount_d3;
+    end
+    wire [8:0] cam_x_d4 = hcount_d4[9:1]; // cam_x delayed 4 cycles to match output
+    wire [11:0] test_pixel =
+        (cam_x_d4 < 9'd80)  ? 12'hF00 :   // Red
+        (cam_x_d4 < 9'd160) ? 12'h0F0 :   // Green
+        (cam_x_d4 < 9'd240) ? 12'h00F :   // Blue
+                               12'hFFF;    // White
 
     always @(posedge clk) begin
         if (rst) begin
@@ -230,9 +245,16 @@ module vga_display (
             vga_b <= 4'h0;
         end else begin
             if (out_valid) begin
-                vga_r <= filtered_pixel[11:8];
-                vga_g <= filtered_pixel[7:4];
-                vga_b <= filtered_pixel[3:0];
+                if (sw == 2'b11) begin
+                    // Test pattern: bypasses all camera data
+                    vga_r <= test_pixel[11:8];
+                    vga_g <= test_pixel[7:4];
+                    vga_b <= test_pixel[3:0];
+                end else begin
+                    vga_r <= filtered_pixel[11:8];
+                    vga_g <= filtered_pixel[7:4];
+                    vga_b <= filtered_pixel[3:0];
+                end
             end else begin
                 vga_r <= 4'h0;
                 vga_g <= 4'h0;
