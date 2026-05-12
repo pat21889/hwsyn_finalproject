@@ -1,0 +1,999 @@
+
+--- PAGE 1 ---
+This document is provided "as is" with no warranties whatsoever, including any warranty of merchantability, non-in-
+fringement, fitness for any particular purpose, or any warranty otherwise arising out of any proposal, specification, or 
+sample.
+OmniVision Technologies, Inc. disclaims all liability, including liability for infringement of any proprietary 
+rights, relating to the use of information in this document. No license, expressed or implied, by estoppel 
+or otherwise, to any intellectual property rights is granted herein.
+* Third-party brands, names, and trademarks are the property of their respective owners.
+Note:
+The information contained in this document is considered proprietary to OmniVision Technologies, Inc. This 
+information may be distributed only to individuals or organizations authorized by OmniVision Technologies, Inc. to 
+receive said information. Individuals and/or organizations are not allowed to re-distribute said information
+APPLICATION NOTE
+Omni
+ision ®
+OmniVision Serial Camera Control Bus (SCCB)
+Functional Specification
+Last Modified: 25 June 2007
+Document Version: 2.2
+Revision Number
+Date
+Revision
+1.0
+06/07/00
+Initial Release
+1.01
+06/08/00
+Nomenclature change entire document - SIO1 changed to SIO_C, SIO0 
+changed to SIO_D, SCS_ changed to SCCB_E
+2.0
+03/08/02
+Inclusion of Section 3.5 documenting the 2-wire master/slave 
+implementation where SCCB_E is not available in the CAMERACHIP™ 
+sensor
+2.1
+02/26/03
+Incorporated into new template
+2.2
+06/25/07
+In subsection 2.2, changed last sentence from "The minimum of tCYC is 
+10 µs" to "Typical for tCYC is 10 µs." In Table 5-1, added column for Typ 
+values and moved tCYC value of 10 µs from Min value to Typ value.
+
+--- PAGE 2 ---
+2
+Proprietary to OmniVision Technologies, Inc.
+Version 2.2,  June 25, 2007
+OmniVision Serial Camera Control Bus (SCCB)
+Omni
+ision
+00Table of Contents
+Section 1, Overview. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 5
+1.1
+2-Wire SCCB Interface . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 5
+Section 2, Pin Functions . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 6
+2.1
+SCCB_E Signal. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 6
+2.2
+SIO_C . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7
+2.3
+SIO_D . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7
+Section 3, Data Transmission . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 8
+3.1
+3-Wire Data Transmission. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 8
+3.2
+Transmission Cycles . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 9
+3.3
+Suspend Mode . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15
+Section 4, SCCB Structure  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16
+4.1
+Master Device . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16
+4.2
+Slave Devices . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16
+4.3
+Conflict-Protection Resistors. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17
+4.4
+Suspend Circuits . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18
+Section 5, Electrical Characteristics  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20
+Section 6, Terminology  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21
+
+--- PAGE 3 ---
+Version 2.2,  June 25, 2007
+Proprietary to OmniVision Technologies, Inc.
+3
+Omni
+ision
+00List of Figures
+Figure 1-1
+SCCB Functional Block Diagram. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 5
+Figure 1-2
+2-Wire SCCB Functional Block Diagram . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 5
+Figure 3-1
+3-WIre Data Transmission Timing Diagram. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 8
+Figure 3-2
+3-Wire Start of Data Transmission. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 8
+Figure 3-3
+3-Wire Stop of Data Transmission . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 9
+Figure 3-4
+Transmission Phases  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 9
+Figure 3-5
+3-Phase Write Transmission Cycle . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10
+Figure 3-6
+2-Phase Write Transmission Cycle . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10
+Figure 3-7
+2-Phase Read Transmission Cycle . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10
+Figure 3-8
+Phase 1 — ID Address  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 11
+Figure 3-9
+Phase 2 — Sub-address (3-Phase Write Transmission) . . . . . . . . . . . . . . . . . . . . . . . . . 12
+Figure 3-10
+Phase 2 — Read Data (2-Phase Read Transmission)  . . . . . . . . . . . . . . . . . . . . . . . . . . 12
+Figure 3-11
+Phase 2 Sub-address Write Transmission/Phase 3 Write Data Transmission  . . . . . . . . 13
+Figure 3-12
+Don’t-Care Bit  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14
+Figure 3-13
+Suspend Mode  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15
+Figure 4-1
+Block Diagram of the Master and Slaves. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16
+Figure 4-2
+Conflict-Protection Resistor Connections  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17
+Figure 4-3
+Conflict-Protection Resistors . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17
+Figure 4-4
+Suspend Circuit - PWDN Mode . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18
+Figure 4-5
+Suspend Circuit - Switch Mode . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 19
+
+--- PAGE 4 ---
+4
+Proprietary to OmniVision Technologies, Inc.
+Version 2.2,  June 25, 2007
+OmniVision Serial Camera Control Bus (SCCB)
+Omni
+ision
+00List of Tables
+Table 2-1
+Master Device Pin Descriptions. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 6
+Table 2-2
+Slave Device Pin Descriptions. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 6
+Table 5-1
+SCCB Electrical Characteristics  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20
+
+--- PAGE 5 ---
+Overview
+Version 2.2,  June 25, 2007
+Proprietary to OmniVision Technologies, Inc.
+5
+Omni
+ision
+1 Overview
+OmniVision Technologies, Inc. has defined and deployed the Serial Camera Control Bus (SCCB), 
+a 3-wire serial bus, for control of most of the functions in OmniVision’s family of CAMERACHIP™ 
+sensors. In reduced pin package parts, the SCCB operates in a modified 2-wire serial mode.
+OmniVision CAMERACHIP sensors will only operate as slave devices and the companion back-end 
+interface must assert as the master. One SCCB master device can be connected to the SCCB to 
+control at least one SCCB slave device. An optional suspend-control signal provides the capability 
+for the SCCB master device to power down the SCCB system. Refer to Figure 1-1 for the SCCB 
+functional diagram illustrating the 3-wire connection.
+Figure 1-1
+  SCCB Functional Block Diagram
+1.1 2-Wire SCCB Interface
+The modified 2-wire implementation allows for a SCCB master device to interface with only one 
+slave device. This 2-wire application is implemented in the CAMERACHIP sensors with reduced pin 
+packages where the SCCB_E signal is not available externally. Refer to Figure 1-2 for the functional 
+diagram of the 2-wire implementation for the SCCB interface.
+Figure 1-2
+  2-Wire SCCB Functional Block Diagram
+The 2-wire implementation requires one of the following two master control methods in order to 
+facilitate the SCCB communication.
+1. In the first instance, the master device must be able to support and maintain the data line of the 
+bus in a tri-state mode.
+2. The alternate method if the master cannot maintain a tri-state condition of the data line is to 
+drive the data line either high or low and to note the transition there to assert communications 
+with the slave CAMERACHIP sensor.
+SCCB_E
+SIO_C
+SIO_D
+master device
+slave device
+slave device
+slave device
+SCCB_AP_001
+SIO_C
+SIO_D
+master device
+slave device
+SCCB_AP_002
+
+--- PAGE 6 ---
+6
+Proprietary to OmniVision Technologies, Inc.
+Version 2.2,  June 25, 2007
+OmniVision Serial Camera Control Bus (SCCB)
+Omni
+ision
+2 Pin Functions
+Refer to Table 2-1 and Table 2-2 for pin descriptions of the master and slave devices, respectively, 
+used in SCCB communications.
+2.1 SCCB_E Signal
+The SCCB_E signal is a single-directional, active-low, control signal that must be driven by the 
+master device. It indicates the start or stop of the data transmission. A high-to-low transition of the 
+SCCB_E indicates a start of a transmission, while the low-to-high transition of the SCCB_E 
+indicates a stop of a transmission. SCCB_E must remain at logical 0 during a data transmission. A 
+logical 1 of SCCB_E indicates that the bus is idle.
+Table 2-1.
+  Master Device Pin Descriptions
+Signal Name
+Signal Type
+Description
+SCCB_Ea
+a. Where SCCB_E is not present on the CAMERACHIP sensor, this signal is by default enabled and held high.
+Output
+Serial Chip Select Output - master drives SCCB_E at logical 1 
+when the bus is idle. Drives at logical 0 when the master asserts 
+transmissions or the system is in Suspend mode.
+SIO_C
+Output
+Serial I/O Signal 1 Output - master drives SIO_C at logical 1 when 
+the bus is idle. Drives at logical 0 and 1 when SCCB_E is driven 
+at 0. Drives at logical 0 when the system is Suspend mode.
+SIO_D
+I/O
+Serial I/O Signal 0 Input and Output - remains floating when the 
+bus is idle and drives to logical 0 when the system is in Suspend 
+mode.
+PWDN
+Output
+Power down output
+Table 2-2.
+  Slave Device Pin Descriptions
+Signal Name
+Signal Type
+Description
+SCCB_Ea
+a. Where SCCB_E is not present on the CAMERACHIP sensor, this signal is by default enabled and held high.
+Input
+Serial Chip Select Input - input pad can be shut down when the 
+system is in Suspend mode. 
+SIO_C
+Input
+Serial I/O Signal 1 Input - input pad can be shut down when the 
+system is in Suspend mode.
+SIO_D
+I/O
+Serial I/O Signal 0 Input and Output - input pad can be shut down 
+when the system is in Suspend mode.
+PWDN
+Input
+Power down input
+
+--- PAGE 7 ---
+Pin Functions
+Version 2.2,  June 25, 2007
+Proprietary to OmniVision Technologies, Inc.
+7
+Omni
+ision
+2.2 SIO_C
+The SIO_C signal is a single-directional, active-high, control signal that must be driven by the 
+master device. It indicates each transmitted bit. The master must drive SIO_C at logical 1 when the 
+bus is idle. A data transmission starts when SIO_C is driven at logical 0 after the start of 
+transmission. A logical 1 of SIO_C during a data transmission indicates a single transmitted bit. 
+Thus, SIO_D can occur only when SIO_C is driven at 0. The period of a single transmitted bit is 
+defined as tCYC as shown in Figure 3-8. Typical for tCYC is 10 µs.
+2.3 SIO_D
+The SIO_D signal is a bi-directional data signal that can be driven by either master or slave devices. 
+It remains floating, or tri-state, when the bus is idle. Maintenance of the signal is the responsibility 
+of both the master and slave devices in order to avoid propagating an unknown bus state.
+Bus float and contention are allowed during transmissions of Don’t-Care or NA bits. The definition 
+of the Don’t-Care bit is described in Section 3.2.3. The master must avoid propagating an unknown 
+bus state condition when the bus is floating or conflicting. A conflict-protection resistor is required 
+to reduce static current when the bus conflicts. The connection of the conflict-protection resistor is 
+shown in Figure 4-2.
+A single-bit transmission is indicated by a logical 1 of SIO_C. SIO_D can occur only when SIO_C 
+is driven at logical 0. However, an exception is allowed at the beginning and the end of a 
+transmission. During the period that SCCB_E is asserted and before SIO_C goes to 0, SIO_D can 
+be driven at 0. During the period that SIO_C goes to 1 and before SCCB_E is de-asserted, SIO_D 
+can also be driven at 0.
+
+--- PAGE 8 ---
+8
+Proprietary to OmniVision Technologies, Inc.
+Version 2.2,  June 25, 2007
+OmniVision Serial Camera Control Bus (SCCB)
+Omni
+ision
+3 Data Transmission
+3.1 3-Wire Data Transmission
+A graphic overview of the SCCB 3-wire data transmission is shown in Figure 3-1. The SCCB 
+protocol allows for bus float and contention during data transmissions. Writing data to slaves is 
+defined as a write transmission, while reading data from slaves is defined as a read transmission.
+Figure 3-1
+  3-WIre Data Transmission Timing Diagram
+3.1.1 Start of Data Transmission
+The start of data transmission in the 3-wire implementation is indicated by a high-to-low transition 
+of SCCB_E. Before asserting SCCB_E, the master must drive SIO_D at logical 1. This will avoid 
+propagating an unknown bus state before the transmission of data. After de-asserting SCCB_E, the 
+master must drive SIO_D at 1 for a defined period again to avoid unknown bus state propagation. 
+This period, tPSA, is defined as the post-active time of SCCB_E and has a minimum value of 0 µs.
+Two timing parameters are defined for the start of transmission, tPRC and tPRA. The tPRC is defined 
+as the pre-charge time of SIO_D. This indicates the period that SIO_D must be driven at logical 1 
+prior to assertion of SCCB_E. The minimum value of tPRC is 15 ns. The tPRA is defined as the 
+pre-active time of SCCB_E. This indicates the period that SCCB_E must be asserted before SIO_D 
+is driven at logical 0. The minimum value of tPRA is 1.25 µs. The 3-wire start of transmission is 
+shown in Figure 3-2.
+Figure 3-2
+  3-Wire Start of Data Transmission
+SCCB_E
+SIO_C
+SIO_D
+D6
+D5
+D4
+D3
+D2
+D7
+D1
+X
+D0
+start of
+transmission
+stop of
+transmission
+SCCB_AP_003
+SCCB_E
+SIO_C
+SIO_D
+start of
+transmission
+tPRC
+tPRA
+SCCB_AP_004
+
+--- PAGE 9 ---
+Data Transmission
+Version 2.2,  June 25, 2007
+Proprietary to OmniVision Technologies, Inc.
+9
+Omni
+ision
+3.1.2 Stop of Data Transmission
+A stop of data transmission is indicated by a low-to-high transmission of SCCB_E. Two timing 
+parameters are defined for the stop of transmission, tPSC and tPSA. The tPSC is defined as 
+post-charge time of SIO_D. It indicates the period that SIO_D must remain at logical 1 after 
+SCCB_E is de-asserted. The minimum value of tPSC is 15 ns. The tPSA is defined as the post-active 
+time of SCCB_E. It indicates the period that SCCB_E must remain at logical 0 after SIO_D is 
+de-asserted. The minimum value of tPSA is 0 ns. The 3-wire stop of transmission is shown in 
+Figure 3-3.
+Figure 3-3
+  3-Wire Stop of Data Transmission
+3.2 Transmission Cycles
+A basic element of a data transmission is called a phase. This section describes the three kinds of 
+transmissions:
+•
+3-Phase Write Transmission Cycle
+•
+2-Phase Write Transmission Cycle
+•
+2-Phase Read Transmission Cycle
+3.2.1 Transmission Phases
+A phase contains a total of 9 bits. The 9 bits consist of an 8-bit sequential data transmission followed 
+by a ninth bit (see Figure 3-4). The ninth bit is a Don’t-Care bit or an NA bit, depending on whether 
+the data transmission is a write or read. The maximum number of phases that can be included in a 
+transmission is three. The Most Significant Bit (MSB) is always asserted first for each phase.
+Figure 3-4
+  Transmission Phases
+SCCB_E
+SIO_C
+SIO_D
+stop of
+transmission
+tPSC
+tPSA
+SCCB_AP_005
+phase 1
+phase 2
+phase 3
+7
+6
+5
+4
+3
+2
+1
+0 X 7
+6
+5
+4
+3
+2
+1
+0 X 7
+6
+5
+4
+3
+2
+1
+0 X
+phase 1:  IP address
+phase 2:  sub-address / read data
+phase 3:  write data
+SCCB_AP_006
+
+--- PAGE 10 ---
+10
+Proprietary to OmniVision Technologies, Inc.
+Version 2.2,  June 25, 2007
+OmniVision Serial Camera Control Bus (SCCB)
+Omni
+ision
+3.2.1.1 3-Phase Write Transmission Cycle
+The 3-phase write transmission cycle (see Figure 3-5) is a full write cycle such that the master can 
+write one byte of data to a specific slave(s). The ID address identifies the specific slave that the 
+master intends to access. The sub-address identifies the register location of the specified slave. 
+The write data contains 8-bit data that the master intends to overwrite the content of this specific 
+address. The ninth bit of the three phases will be Don’t-Care bits.
+Figure 3-5
+  3-Phase Write Transmission Cycle
+3.2.1.2 2-Phase Write Transmission Cycle
+The 2-phase write transmission cycle is followed by a 2-phase read transmission cycle. The 
+purpose of issuing a 2-phase write transmission cycle (see Figure 3-6) is to identify the sub-address 
+of some specific slave from which the master intends to read data for the following 2-phase read 
+transmission cycle. The ninth bit of the 2-phase write transmission will be Don’t-Care bits.
+Figure 3-6
+  2-Phase Write Transmission Cycle
+3.2.1.3 2-Phase Read Transmission Cycle
+There must be either a 3-phase or a 2-phase write transmission cycle asserted ahead of a 2-phase 
+read transmission cycle. The 2-phase read transmission cycle (see Figure 3-7) has no ability to 
+identify the sub-address. The 2-phase write transmission cycle contains read data of 8 bits and a 
+ninth Don’t-Care bit or NA bit. The master must drive the NA bit at logical 1.
+Figure 3-7
+  2-Phase Read Transmission Cycle
+phase 1
+phase 2
+phase 3
+IP address
+X
+sub-address
+X
+write data
+X
+SCCB_AP_007
+phase 1
+phase 2
+IP address
+X
+sub-address
+X
+SCCB_AP_008
+phase 1
+phase 2
+IP address
+X
+read data
+NA
+SCCB_AP_009
+
+--- PAGE 11 ---
+Data Transmission
+Version 2.2,  June 25, 2007
+Proprietary to OmniVision Technologies, Inc.
+11
+Omni
+ision
+3.2.2 Phase Descriptions
+The following sections describe the individual phases found in the various transmission cycles.
+3.2.2.1 Phase 1 — ID Address
+Phase 1 is asserted by the master to identify the selected slave to which the data is read or written. 
+Each slave has a unique ID address. The ID address is comprised of seven bits, ordered from bit 7 
+to bit 1, and can identify up to 128 slaves. The eighth bit, bit 0, is the read/write selector bit that 
+specifies the transmission direction of the current cycle. A logical 0 represents a write cycle and a 
+logical 1 represents a read cycle.
+The ninth bit of Phase 1 must be a Don’t-Care bit. SIO_D_OE_M_ and SIO_D_OE_S_ shown in 
+Figure 3-8 are internal active-low, I/O-enabled signals in the master and slave(s), respectively. 
+SIO_D_OE_S_ transaction occurs before the transition of SIO_D_OE_M_, as shown in Figure 3-8. 
+The master asserts the ID address, but de-asserts the ninth bit (Don’t-Care bit). The master must 
+mask the input of SIO_D during the period of the Don’t-Care bit and force the input to 0 to avoid 
+propagating an unknown bus state. The master continues asserting the following phases regardless 
+of the response to the Don’t-Care bit by the slave(s).
+The SIO_OE_S is controlled by the slave(s) and may remain at logical 1 or be driven at logical 0. 
+The bus may be in a floating or conflicting status during the transmission of the Don’t-Care bit. In 
+this case, it is the slave’s responsibility to avoid propagating an unknown bus state.
+A detailed description of the Don’t-Care bit is described in Section 3.2.3.
+Figure 3-8
+  Phase 1 — ID Address
+SCCB_E
+SIO_C
+SIO_D
+D6
+D5
+D4
+D3
+D2
+D7
+D1
+R/W
+X
+D7
+SIO0_OE_M_
+SIO0_OE_S_
+0:  write
+1:  read
+phase 1
+tcyc
+SCCB_AP_010
+
+--- PAGE 12 ---
+12
+Proprietary to OmniVision Technologies, Inc.
+Version 2.2,  June 25, 2007
+OmniVision Serial Camera Control Bus (SCCB)
+Omni
+ision
+3.2.2.2 Phase 2 — Sub-address/Read Data
+Either the master or the slave(s) may assert a phase 2 transmission. A phase 2 transmission 
+asserted by the master identifies the sub-address of the slave(s) the master intends to access. A 
+phase 2 transmission asserted by the slave(s) indicates the read data that the master will receive. 
+The slave(s) recognize the sub-address of this read data according to the previous 3-phase or 
+2-phase write transmission cycles.
+The ninth bit is defined as a Don’t-Care bit when the master asserts phase 2. SIO_D_OE_M_ and 
+SIO_D_OE_S_ are the same as those defined under Section 3.2.2.1. The detailed timing is 
+illustrated in Figure 3-9.
+Figure 3-9
+  Phase 2 — Sub-address (3-Phase Write Transmission)
+The ninth bit is defined as an NA bit when the slave(s) assert the phase 2 transmission. 
+SIO_D_OE_M_ is de-asserted from the ninth bit of phase 1 and re-asserted for the NA bit. The 
+master is responsible for driving SIO_D at logical 1 during the period of the NA bit. Concurrently, 
+SIO_D_OE_S_ is asserted. The selected slave is responsible for driving SIO_D during the read 
+data period. Since SIO_D_OE_S_ is de-asserted before SIO_D_OE_M_ is asserted during the 
+period of the NA bit, bus float of SIO_D occurs when the master tries to drive the NA bit. The detailed 
+timing is shown in Figure 3-10.
+Figure 3-10   Phase 2 — Read Data (2-Phase Read Transmission)
+SCCB_E
+SIO_C
+SIO_D
+D6
+D5
+D4
+D3
+D2
+D7
+D1
+D0
+X
+X
+D7
+SIO0_OE_M_
+SIO0_OE_S_
+phase 2
+SCCB_AP_011
+SCCB_E
+SIO_C
+SIO_D
+D6
+D5
+D4
+D3
+D2
+D7
+D1
+D0
+X
+SIO0_OE_M_
+SIO0_OE_S_
+SCCB_AP_012
+phase 2
+
+--- PAGE 13 ---
+Data Transmission
+Version 2.2,  June 25, 2007
+Proprietary to OmniVision Technologies, Inc.
+13
+Omni
+ision
+3.2.2.3 Phase 3 — Write Data
+Only the master may assert the phase 3 transmission. The phase 3 transmission contains the actual 
+data the master intends to write to the slave(s). The timing diagram shown in Figure 3-11 applies to 
+both Phase 2 sub-address write transmissions and Phase 3 write data transmissions.
+The ninth bit of the phase 3 transmission is defined as a Don’t-Care bit since the master is asserting 
+the transmission. SIO_D_OE_M_ and SIO_D_OE_S_ are the same as those defined for a phase 1 
+transmission.
+Figure 3-11
+  Phase 2 Sub-address Write Transmission/Phase 3 Write Data Transmission
+3.2.3 Don’t-Care Bit
+The Don’t-Care bit is the ninth bit of a master-issued transmission (ID address, sub-address, and 
+write data). The master will continue to assert transmission phases until the transmission cycle is 
+complete. The master also assumes that there is no transmission error during data transmissions. 
+The purpose of the Don’t-Care bit is to indicate the completion of the transmission.
+When there is more than one slave on the bus, the slave(s) may respond to the Don’t-Care bit in 
+one of two ways. If slave 1 is selected and data is written to this specific slave, slave 1 will drive 
+SIO_D to logical 0 for the Don’t-Care bit. In this case, the SIO_D signal may conflict at the beginning 
+of the Don’t-Care bit, while it may be floating at the end of the Don’t-Care bit (see Figure 3-12).
+Alternately, it is possible that the slave(s) do not respond to the Don’t-Care bit of the current phase. 
+In this situation, the SIO_D bus remains at float for the whole Don’t-Care bit.
+The master does not check for transmission errors during data transmissions. There is a provision 
+for the slave(s) to record the status of the Don’t-Care bit in an internal register as shown in the 
+following example:
+A slave(s) has defined a 1 byte register as the Don’t-Care Status register. The default value of the 
+Don’t-Care Status register is defined as 55. Assuming there are no errors during the data transmission, 
+this register value will remain unchanged. If the slave does not receive the Don’t-Care bit, the register 
+value will change to 54.
+SCCB_E
+SIO_C
+SIO_D
+D6
+D5
+D4
+D3
+D2
+D7
+D1
+D0
+X
+X
+SIO0_OE_M_
+SIO0_OE_S_
+phase 2/phase 3
+SCCB_AP_013
+
+--- PAGE 14 ---
+14
+Proprietary to OmniVision Technologies, Inc.
+Version 2.2,  June 25, 2007
+OmniVision Serial Camera Control Bus (SCCB)
+Omni
+ision
+The master may query the Don’t-Care Status register to determine if there has been a transmission 
+of data. The master will issue an additional read transmission to the Don’t-Care Status register in 
+the target slave to check the value and, subsequently, determine if an error has occurred. This 
+scheme will not determine an error if the entire SCCB circuit has been corrupted.
+SIO_D_OE_M_ can be de-asserted and re-asserted during the Don’t-Care bit transmission only 
+when SIO_C is driven to logical 0. The tmack is defined as the period of de-assertion of 
+SIO_D_OE_M_ prior to the low-to-high transition of SIO_C during the Don’t-Care bit transmission. 
+The period of re-assertion of SIO_D_OE_M_ after the high-to-low transmission is also defined as 
+tmack. The minimum value of tmack is 1.25 µs.
+If a slave intends to respond to the Don’t-Care bit, SIO_D_OE_S_ can be asserted and de-asserted 
+during the Don’t-Care bit transmission only when SIO_C is driven to logical 0. The tsack is defined 
+as the period of assertion of SIO_D_OE_S_ occurring after the high-to-low transition of SIO_C at 
+the beginning of the Don’t-Care bit transmission. The period of de-assertion of SIO_D_OE_S_ 
+occurring after the high-to-low transition at the end of the Don’t-Care transmission is also defined 
+as tsack. The minimum value of tsack is 370 ns.
+Figure 3-12   Don’t-Care Bit
+SCCB_E
+SIO_C
+SIO_D
+D0
+X
+D7
+SIO0_OE_M_
+SIO0_OE_S_
+conflict
+float
+tmack
+tsack
+tmack
+tsack
+SCCB_AP_014
+
+--- PAGE 15 ---
+Data Transmission
+Version 2.2,  June 25, 2007
+Proprietary to OmniVision Technologies, Inc.
+15
+Omni
+ision
+3.3 Suspend Mode
+Suspend mode (see Figure 3-13) is determined by the dedicated PWDN_ pin of the master. This is 
+achieved by the active-low output signal that specifies the suspension period as the master 
+attempts to power down the system. During the suspension period, SCCB_E, SIO_C, and SIO_D 
+are all driven to logical 0 by the master in order to avoid current leakage. There must be some time 
+for PWDN_ to be asserted prior to and be de-asserted after the assertion of SCCB_E, SIO_D, and 
+SIO_C. This parameter is defined as tsup. The minimum value of tsup is 50 ns. This scheme can 
+prevent logical errors from occurring in SCCB slaves.
+The PWDN pin in slaves has the opposite polarity of the PWDN_ pin of the master. Two control 
+schemes for suspending the slave(s) are described in Section 4.4.
+Figure 3-13   Suspend Mode
+PWDN_
+SCCB_E
+SIO_C
+SIO_D
+suspend
+tsus
+tsus
+SCCB_AP_015
+
+--- PAGE 16 ---
+16
+Proprietary to OmniVision Technologies, Inc.
+Version 2.2,  June 25, 2007
+OmniVision Serial Camera Control Bus (SCCB)
+Omni
+ision
+4 SCCB Structure
+The structure of the SCCB system is shown in Figure 4-1. This diagram illustrates the connection 
+of one master with one slave. Multiple slaves may be connected on the same bus. A 
+conflict-protection resistor of SIO_D is required for each slave. Connection of conflict-protection 
+resistors for multiple slaves is illustrated in Figure 4-3.
+Figure 4-1
+  Block Diagram of the Master and Slaves
+4.1 Master Device
+The master device drives both SCCB_E and SIO_C signals, while either the master or slave(s) can 
+drive the SIO_D signal. During the de-assertion of SCCB_E, the master must block the SIO_D input 
+to avoid propagating unknown bus conditions due to bus float. During the Don’t-Care bit 
+transmission, the master must ignore the status of SIO_D and keep asserting the subsequent 
+phases.
+The PWDN_ is driven by the master to indicate the suspend mode cycle. As noted in Section 4.4, 
+there are two different ways to implement suspension circuits within the system.
+4.2 Slave Devices
+The slave(s) receive the SCCB_E and SIO_C signals from the master, while either the master or 
+the slave(s) can drive SIO_D. Input pads of the SCCB_E, SIO_C, and SIO_D signals contain the 
+standby (STBY) control terminal for reducing leakage current when the inputs are floating. Output 
+terminals of those input pads are driven at logical 1 when STBY is asserted. This can avoid logical 
+errors during suspend cycles.
+SCCB master
+master device
+SIO_D_OE_M_
+SCCB_E
+SIO_C
+SIO_D
+SCCB slave
+slave device
+SIO_D_OE_S_
+STBY
+STBY
+STBY
+PWDN_
+PWDN
+SCCB_AP_016
+
+--- PAGE 17 ---
+SCCB Structure
+Version 2.2,  June 25, 2007
+Proprietary to OmniVision Technologies, Inc.
+17
+Omni
+ision
+PWDN controls STBY of SCCB_E. This means the output terminal of the SCCB_E input pad is 
+driven at logical 1 during suspend mode cycles even though the master drives the input of SCCB_E 
+at 0.
+The STBY control terminals of both SIO_C and SIO_D are controlled by PWDN and SCCB_E. 
+During suspend mode cycles and the de-assertion of SCCB_E, the output terminals of SIO_C and 
+SIO_D input pads are both driven at logical 1. During the Don’t-Care bit transmission, the slave(s) 
+must avoid propagating unknown bus conditions.
+4.3 Conflict-Protection Resistors
+Incorporating series resistors between SIO_D output of the master and the SIO_D input of the 
+slave(s) can avoid short circuits when bus contention occurs.
+Figure 4-2
+  Conflict-Protection Resistor Connections
+Figure 4-3
+  Conflict-Protection Resistors
+SIO_D
+SIO_D
+SIO_D
+SIO_D
+master device
+slave device
+slave device
+slave device
+SCCB_AP_017
+slave
+0
+master
+1
+master
+0
+slave
+1
+SCCB_AP_018
+
+--- PAGE 18 ---
+18
+Proprietary to OmniVision Technologies, Inc.
+Version 2.2,  June 25, 2007
+OmniVision Serial Camera Control Bus (SCCB)
+Omni
+ision
+4.4 Suspend Circuits
+There are two methods of issuance of a bus suspend cycle:
+•
+PWDN Mode
+•
+Switch Mode
+4.4.1 PWDN Mode
+The power pads of the slave(s) are always connected to VDD. The PWDN_ signal from the master 
+device needs to be inverted prior to connection to the slave(s) and the slave(s) circuit has an 
+opposite polarity. During normal operations, PWDN_ of the master is driven at logical 1 and the NPN 
+transistor is ON. In normal operation, the PWDN of the slave(s) is driven at logical 0. During the 
+suspend mode cycle, PWDN_ is driven at 0 and the NPN transistor is OFF. During the suspend 
+mode operation, the PWDN of the slave(s) is driven at 1. There is no leakage current during the 
+suspend cycle.
+Figure 4-4
+  Suspend Circuit - PWDN Mode
+SCCB_E
+SIO_C
+SIO_D
+master device
+slave device
+VDD
+VDD
+PWDN_
+PWDN
+SCCB_AP_019
+
+--- PAGE 19 ---
+SCCB Structure
+Version 2.2,  June 25, 2007
+Proprietary to OmniVision Technologies, Inc.
+19
+Omni
+ision
+4.4.2 Switch Mode
+The PWDN circuit of the slave(s) is always connected to logical 0. A power switch circuit is required 
+for each slave. The power of each slave is OFF during suspend mode cycles. In suspend mode 
+operation, there is no leakage current present as no power is provided to the slave(s).
+Figure 4-5
+  Suspend Circuit - Switch Mode
+SCCB_E
+SIO_C
+SIO_D
+master device
+slave device
+VDD
+VDD
+PWDN_
+PWDN
+SCCB_AP_020
+
+--- PAGE 20 ---
+20
+Proprietary to OmniVision Technologies, Inc.
+Version 2.2,  June 25, 2007
+OmniVision Serial Camera Control Bus (SCCB)
+Omni
+ision
+5 Electrical Characteristics
+Table 5-1.
+  SCCB Electrical Characteristics
+Symbol
+Parameter
+Condition
+Min
+Typ
+Max
+Unit
+tcyc
+Single bit transmission cycle time
+10
+µs
+tprc
+Pre-charge time of SIO_D
+15
+ns
+tpra
+Pre-active time of SCCB_E
+1.25
+µs
+tpsc
+Post-charge time of SIO_D
+15
+µs
+tpsa
+Post-active time of SCCB_E
+0
+µs
+tmack
+SIO_D_OE_M_ transition time
+ 1.25
+µs
+tsack
+SIO_D_OE_S_ transition time
+370
+ns
+tsup
+PWDN_ pre/post-charge time
+50
+ns
+
+--- PAGE 21 ---
+Terminology
+Version 2.2,  June 25, 2007
+Proprietary to OmniVision Technologies, Inc.
+21
+Omni
+ision
+6 Terminology
+Don’t-Care Bit:
+Ninth bit of a Write phase.
+ID Address:
+Unique address of each device on the bus. The master asserts 
+the slave ID address to identify transmissions destined for the 
+slave device(s).
+NA Bit:
+Ninth bit of a Read phase.
+Phases:
+A phase contains a total of 9 bits consisting of a sequential 
+transmission of 8 data bits followed by a ninth Don’t-Care or NA 
+bit, depending on writes or reads.
+Read Phases:
+Phases that read data from slave(s).
+Read Transmissions:
+Master-asserted transmissions which read data from slave 
+device(s).
+SCCB Data Transmissions:
+Transmissions consist of phases. All transmissions are initiated 
+by the master device. Start and stop of a transmission in the 
+3-wire system are indicated by the signaling of SCCB_E. Start 
+and stop of a transmission in the 2-wire system are indicated by 
+signaling of the SIO_D.
+SCCB_E:
+Serial bus enable/disable signal, previously denoted as SCS_, 
+SCCBB, and IICB in older documentation.
+SCCB Master Device:
+An SCCB device that can assert SCCB transmissions. Only one 
+master is allowed in the system.
+SCCB Slave Device(s):
+SCCB device(s) that can respond to an asserted SCCB 
+transmission. At least one slave can be connected to the 
+system.
+SCCB System:
+System consists of one master and at least one slave.
+Serial Camera Control Bus: Typically, a 3-wire serial bus with an optional suspend-control
+(SCCB)
+signal. May be implemented in a 2-wire mode where required.
+SIO_C:
+Serial bus clock signal, previously denoted as SIO1 and SCL in 
+older documentation.
+SIO_D:
+Serial bus data signal, previously denoted as SIO0 and SDA in 
+older documentation.
+
+--- PAGE 22 ---
+22
+Proprietary to OmniVision Technologies, Inc.
+Version 2.2,  June 25, 2007
+OmniVision Serial Camera Control Bus (SCCB)
+Omni
+ision
+Sub-address:
+The master asserts the sub-address to indicate the specific 
+slave function/location to be accessed.
+Suspend Mode:
+Master-asserted suspend periods of device and/or system 
+suspension.
+Transmission Cycles:
+Transmission cycles include 3-phase write transmission cycle, 
+2-phase write transmission cycle, and 2-phase read 
+transmission cycle.
+Write Transmissions:
+Master-asserted transmissions which write data to slave 
+device(s).
+
+--- PAGE 23 ---
+Terminology
+Version 2.2,  June 25, 2007
+Proprietary to OmniVision Technologies, Inc.
+23
+Omni
+ision
+Note:
+•
+All information shown herein is current as of the revision and publication date. Please refer 
+to the OmniVision web site (http://www.ovt.com) to obtain the current versions of all 
+documentation.
+•
+OmniVision Technologies, Inc. reserves the right to make changes to their products or to 
+discontinue any product or service without further notice (It is advisable to obtain current product 
+documentation prior to placing orders). 
+•
+Reproduction of information in OmniVision product documentation and specifications is 
+permissible only if reproduction is without alteration and is accompanied by all associated 
+warranties, conditions, limitations and notices. In such cases, OmniVision is not responsible 
+or liable for any information reproduced. 
+•
+This document is provided with no warranties whatsoever, including any warranty of 
+merchantability, non-infringement, fitness for any particular purpose, or any warranty 
+otherwise arising out of any proposal, specification or sample. Furthermore, OmniVision 
+Technologies Inc. disclaims all liability, including liability for infringement of any proprietary 
+rights, relating to use of information in this document. No license, expressed or implied, by 
+estoppels or otherwise, to any intellectual property rights is granted herein.
+•
+‘OmniVision’ and the OmniVision logo are registered trademarks of OmniVision Technologies, Inc. 
+’CameraChip’ are trademarks of OmniVision Technologies, Inc. All other trade, product or service 
+names referenced in this release may be trademarks or registered trademarks of their respective 
+holders. Third-party brands, names, and trademarks are the property of their respective owners.
+For further information, please feel free to contact OmniVision at info@ovt.com.
+OmniVision Technologies, Inc.
+Sunnyvale, CA USA
+(408) 733-3030
+
+--- PAGE 24 ---
+24
+Proprietary to OmniVision Technologies, Inc.
+Version 2.2,  June 25, 2007
+OmniVision Serial Camera Control Bus (SCCB)
+Omni
+ision
