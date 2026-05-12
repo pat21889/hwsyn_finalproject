@@ -1,0 +1,19 @@
+sv xpm -i "../../../../../../../../AMDVivado/2025.2/Vivado/data/rsb/busdef" \
+"W:/AMDVivado/2025.2/Vivado/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv" \
+"W:/AMDVivado/2025.2/Vivado/data/ip/xpm/xpm_memory/hdl/xpm_memory.sv" \
+
+verilog xil_defaultlib -i "../../../../../../../../AMDVivado/2025.2/Vivado/data/rsb/busdef" \
+"../../../src/clk_wiz.v" \
+"../../../src/frame_buffer.v" \
+"../../../src/image_filter.v" \
+"../../../src/ov7670_capture.v" \
+"../../../src/ov7670_init.v" \
+"../../../src/sccb_master.v" \
+"../../../src/vga_display.v" \
+"../../../src/vga_sync.v" \
+"../../../src/top.v" \
+
+verilog xil_defaultlib "glbl.v"
+
+# Do not sort compile order
+nosort

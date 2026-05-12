@@ -1,0 +1,28 @@
+# Vivado Project files
+*.log
+*.jou
+*.pb
+*.str
+*.xpe
+*.v_
+*.tcl_
+
+# Vivado Directories
+.Xil/
+Final_Project.cache/
+Final_Project.hw/
+Final_Project.ip_user_files/
+Final_Project.runs/
+Final_Project.sim/
+
+# Output files
+*.bit
+*.bin
+*.mcs
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Project specific
+src_for_project/

@@ -1,0 +1,13 @@
+xpm_cdc.sv,systemverilog,xpm,W:/AMDVivado/2025.2/Vivado/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv,incdir="../../../../../../../../AMDVivado/2025.2/Vivado/data/rsb/busdef"
+xpm_memory.sv,systemverilog,xpm,W:/AMDVivado/2025.2/Vivado/data/ip/xpm/xpm_memory/hdl/xpm_memory.sv,incdir="../../../../../../../../AMDVivado/2025.2/Vivado/data/rsb/busdef"
+xpm_VCOMP.vhd,vhdl,xpm,W:/AMDVivado/2025.2/Vivado/data/ip/xpm/xpm_VCOMP.vhd,incdir="../../../../../../../../AMDVivado/2025.2/Vivado/data/rsb/busdef"
+clk_wiz.v,verilog,xil_defaultlib,W:/work/University/Year 2/HWSyn/Final_project3/src/clk_wiz.v,incdir="../../../../../../../../AMDVivado/2025.2/Vivado/data/rsb/busdef"
+frame_buffer.v,verilog,xil_defaultlib,W:/work/University/Year 2/HWSyn/Final_project3/src/frame_buffer.v,incdir="../../../../../../../../AMDVivado/2025.2/Vivado/data/rsb/busdef"
+image_filter.v,verilog,xil_defaultlib,W:/work/University/Year 2/HWSyn/Final_project3/src/image_filter.v,incdir="../../../../../../../../AMDVivado/2025.2/Vivado/data/rsb/busdef"
+ov7670_capture.v,verilog,xil_defaultlib,W:/work/University/Year 2/HWSyn/Final_project3/src/ov7670_capture.v,incdir="../../../../../../../../AMDVivado/2025.2/Vivado/data/rsb/busdef"
+ov7670_init.v,verilog,xil_defaultlib,W:/work/University/Year 2/HWSyn/Final_project3/src/ov7670_init.v,incdir="../../../../../../../../AMDVivado/2025.2/Vivado/data/rsb/busdef"
+sccb_master.v,verilog,xil_defaultlib,W:/work/University/Year 2/HWSyn/Final_project3/src/sccb_master.v,incdir="../../../../../../../../AMDVivado/2025.2/Vivado/data/rsb/busdef"
+vga_display.v,verilog,xil_defaultlib,W:/work/University/Year 2/HWSyn/Final_project3/src/vga_display.v,incdir="../../../../../../../../AMDVivado/2025.2/Vivado/data/rsb/busdef"
+vga_sync.v,verilog,xil_defaultlib,W:/work/University/Year 2/HWSyn/Final_project3/src/vga_sync.v,incdir="../../../../../../../../AMDVivado/2025.2/Vivado/data/rsb/busdef"
+top.v,verilog,xil_defaultlib,W:/work/University/Year 2/HWSyn/Final_project3/src/top.v,incdir="../../../../../../../../AMDVivado/2025.2/Vivado/data/rsb/busdef"
+glbl.v,Verilog,xil_defaultlib,glbl.v
