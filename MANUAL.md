@@ -1,13 +1,13 @@
 # Real-Time Video Capture and Processing System - User Manual
 
-This manual provides instructions for setting up and operating the Real-Time Video Capture system on a Digilent Basys 3 FPGA board using an OV7670 camera sensor.
+This manual provides instructions for setting up and operating the High-Fidelity Real-Time Video Capture system on a Digilent Basys 3 FPGA board using an OV7670 camera sensor.
 
 ## 1. Hardware Requirements
 *   **FPGA Board**: Digilent Basys 3 (Artix-7).
 *   **Camera Sensor**: OV7670 (non-FIFO version).
 *   **Display**: VGA-compatible monitor and VGA cable.
 *   **Power**: Micro-USB cable for programming and power.
-*   **Wiring**: Jumper wires.
+*   **Wiring**: Jumper wires (keep PCLK and XCLK wires as short as possible).
 
 ## 2. Hardware Setup & Wiring
 The camera must be connected to the Basys 3 PMOD headers. Based on the project constraints (`constraints.xdc`), please follow this mapping:
@@ -27,7 +27,7 @@ The camera must be connected to the Basys 3 PMOD headers. Based on the project c
 | **PCLK** | A16 | **JB-2** | Pixel Clock |
 | **HREF** | A17 | **JB-6** | Horizontal Reference |
 | **VSYNC** | B15 | **JB-3** | Vertical Sync |
-| **XCLK** | C15 | **JB-7** | System Clock (Input to Cam) |
+| **XCLK** | C15 | **JB-7** | System Clock (25MHz Output) |
 | **SCL** | A14 | **JB-1** | SCCB Clock |
 | **SDA** | A15 | **JB-5** | SCCB Data |
 | **RST** | P18 | **JC-4** | Hardware Reset |
@@ -41,40 +41,44 @@ The camera must be connected to the Basys 3 PMOD headers. Based on the project c
 ## 3. Getting Started
 1.  **Synthesize and Program**:
     *   Open the project in Xilinx Vivado.
-    *   Add all files from the `src` and `constraints` folders.
+    *   Ensure all files in the `src` directory are included in the project.
     *   Run **Synthesis** and **Implementation**.
-    *   Generate the **Bitstream** (`.bit` file).
-    *   Open **Hardware Manager** and program the Basys 3.
-2.  **Initialization**:
-    *   Once programmed, the camera undergoes an automatic initialization sequence (SCCB configuration).
-    *   The monitor should display a live video feed within 1-2 seconds.
+    *   Generate the **Bitstream** (`.bit` file) and program the Basys 3.
+2.  **Initialization (High-Fidelity Update)**:
+    *   The system uses an advanced **98-register initialization sequence**.
+    *   This includes a calibrated **Color Matrix** and **DSP tuning** to ensure accurate RGB565 reproduction and eliminate the common "green tint" issue.
+    *   **VSYNC Stability**: The capture logic now uses level-sensitive synchronization, making it extremely robust against noise and ensuring the frame never "scrambles" once locked.
+    *   **LED[0]** will turn ON once the initialization sequence is successfully completed via SCCB.
 
 ## 4. Operating Instructions
 The system supports four real-time video modes selected via slide switches **SW[1]** and **SW[0]**.
 
 | SW[1] | SW[0] | Mode | Description |
 | :---: | :---: | :--- | :--- |
-| **0** | **0** | **Raw Video** | Original color stream with **Bilinear Upscaling** for smooth edges. |
+| **0** | **0** | **Raw Video** | High-fidelity color stream with calibrated RGB matrix. |
 | **0** | **1** | **Inversion** | Color negative effect (Digital Inversion). |
-| **1** | **0** | **Red Isolation** | Grayscale except for red channel intensity. |
-| **1** | **1** | **B&W Threshold** | Binary Black & White based on luminance. |
-| **Any** | **Any** | **Smoothing** | Bilinear interpolation is applied to all modes automatically. |
+| **1** | **0** | **Red Isolation** | Grayscale background with only Red channel preserved. |
+| **1** | **1** | **B&W Threshold** | High-contrast Binary (Black & White) based on calculated luminance. |
 
-> [!NOTE]
-> **Extra Credit Feature**: This system uses a dual-bank memory architecture to perform real-time bilinear interpolation. This smooths out the image, effectively removing the blocky pixels usually seen when upscaling 320x240 to 640x480.
+### Advanced Features
+*   **Bilinear Interpolation**: This system implements a real-time bilinear upscaling algorithm in the VGA display pipeline. It smooths the transition between pixels when upscaling the 320x240 camera feed to the 640x480 VGA display, removing the "blocky" look of nearest-neighbor scaling.
+*   **Synchronous Clocking**: The entire system (XCLK, BRAM, and VGA) is driven by a unified 25MHz clock domain, ensuring perfect synchronization and eliminating drift or tearing.
+*   **Noise Reduction**: The camera is configured with active de-noise logic (Registers 0x41, 0x76, 0x77) to provide a cleaner image in low-light conditions.
+*   **Hardware Debugging LEDs**:
+    *   **LED[0]**: Initialization Done (SCCB sequence finished).
+    *   **LED[1]**: VSYNC signal active (Camera is outputting frames).
+    *   **LED[2]**: HREF signal active (Camera is outputting lines).
+    *   **LED[3]**: PCLK signal active (Pixel clock is running).
 
 ## 5. Troubleshooting
 *   **Black Screen**:
-    *   Check VGA cable and monitor input.
-    *   Verify the `cam_xclk` is reaching the camera (24MHz).
-    *   Ensure `cam_pwdn` is pulled low.
+    *   Check if **LED[0]** is ON. If not, the SCCB initialization failed (check SCL/SDA wiring).
+    *   Check if **LED[1-3]** are flickering/ON. If not, the camera is not receiving XCLK or is powered down.
 *   **Corrupted Colors/Tearing**:
-    *   Verify PCLK wiring. This signal is high-speed; keep wires short.
-    *   Check for loose ground connections.
-*   **Failed Initialization**:
-    *   The SCCB (SDA/SCL) lines require pull-up resistors. We enable internal pull-ups, but for best results, add **physical 4.7kΩ resistors** to 3.3V on a breadboard.
+    *   Verify PCLK wiring. This signal is high-speed; keep wires short and away from power lines.
+    *   Ensure the ground connection between the Basys 3 and the camera is solid.
 *   **Blurry Image**:
-    *   The OV7670 lens is manual. Rotate the lens housing to focus the image.
+    *   The OV7670 lens is manual. Rotate the lens housing to focus. The bilinear filtering helps smooth edges, but optical focus is still required.
 
 ---
-*Created for HWSyn Final Project 2025.*
+*Updated for HWSyn Final Project - May 2026.*

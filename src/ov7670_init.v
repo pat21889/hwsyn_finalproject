@@ -59,7 +59,7 @@ module ov7670_init (
     // Total entries: 66 registers + 1 end marker
     // The software reset (COM7=0x80) is sent separately before this table.
     //------------------------------------------------------------------------
-    localparam NUM_REGS = 7'd98;  // Number of register entries
+    localparam NUM_REGS = 7'd101; // Number of register entries (Added 0x4C for Noise Strength)
 
 
     //------------------------------------------------------------------------
@@ -186,7 +186,10 @@ module ov7670_init (
                 7'd94: get_reg_entry = {8'hB2, 8'h0E}; // Magic reserved
                 7'd95: get_reg_entry = {8'hB3, 8'h82}; // Magic reserved
                 7'd96: get_reg_entry = {8'hB8, 8'h0A}; // Magic reserved
-                7'd97: get_reg_entry = {8'h41, 8'h3A}; // COM16: Matrix ENABLED (bit 1 = 1)
+                7'd97: get_reg_entry = {8'h41, 8'h3A}; // COM16: Matrix ENABLED, De-noise ENABLED
+                7'd98: get_reg_entry = {8'h76, 8'hE1}; // REG76: De-noise ENABLED
+                7'd99: get_reg_entry = {8'h77, 8'h01}; // REG77: De-noise offset
+                7'd100:get_reg_entry = {8'h4C, 8'h00}; // DNSTH: De-noise strength
 
                 default: get_reg_entry = {8'hFF, 8'hFF}; // End marker
             endcase
