@@ -6,14 +6,19 @@
 *.xpe
 *.v_
 *.tcl_
+*.xpr
 
 # Vivado Directories
 .Xil/
-Final_Project.cache/
-Final_Project.hw/
-Final_Project.ip_user_files/
-Final_Project.runs/
-Final_Project.sim/
+Final_Project3.cache/
+Final_Project3.hw/
+Final_Project3.ip_user_files/
+Final_Project3.runs/
+Final_Project3.sim/
+Final_Project3.srcs/
+Final_Project.srcs/
+Final_Project3.gen/
+Final_Project3.runs/
 
 # Output files
 *.bit
@@ -26,3 +31,14 @@ Thumbs.db
 
 # Project specific
 src_for_project/
+
+ref/
+.claude/
+
+antigravity_complete_project_prompt.md
+Color_Corruption_Deep_Analysis.md
+extract_pdfs.py
+ov7670_extracted.txt
+OV7670_Summary.md
+sccb_extracted.txt
+SCCB_Summary.md
