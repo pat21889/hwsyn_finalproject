@@ -13,7 +13,9 @@
 // Only 8 registers differ from hardware defaults; all others left at default.
 //============================================================================
 
-module ov7670_init (
+module ov7670_init #(
+    parameter SIMULATION = 1'b0
+) (
     input  wire       clk,       // System clock (100MHz)
     input  wire       rst,       // Synchronous reset (active high)
     // SCCB master interface
@@ -30,8 +32,8 @@ module ov7670_init (
     //------------------------------------------------------------------------
     // Timing constants at 100MHz (1 tick = 10ns)
     //------------------------------------------------------------------------
-    localparam DELAY_1MS   = 24'd100_000;      // 1ms = 100,000 ticks @ 100MHz
-    localparam DELAY_300MS = 28'd30_000_000;    // 300ms = 30,000,000 ticks @ 100MHz
+    localparam DELAY_1MS   = SIMULATION ? 24'd100        : 24'd100_000;
+    localparam DELAY_300MS = SIMULATION ? 28'd1000       : 28'd30_000_000;
 
     //------------------------------------------------------------------------
     // FSM States

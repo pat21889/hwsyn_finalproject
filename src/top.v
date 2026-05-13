@@ -6,7 +6,9 @@
 // Target: Basys 3 (Xilinx Artix-7 xc7a35tcpg236-1)
 //============================================================================
 
-module top (
+module top #(
+    parameter SIMULATION = 1'b0
+) (
     input  wire        clk100,       // Basys 3 100MHz oscillator
     // Camera inputs
     input  wire        cam_pclk,     // OV7670 pixel clock output
@@ -172,7 +174,9 @@ module top (
     );
 
     // 3. OV7670 Init Sequencer
-    ov7670_init u_init (
+    ov7670_init #(
+        .SIMULATION (SIMULATION)
+    ) u_init (
         .clk        (clk100),
         .rst        (sys_rst),
         .sccb_start (sccb_start),

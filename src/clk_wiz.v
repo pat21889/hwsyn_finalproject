@@ -37,77 +37,61 @@ module clk_wiz (
     output wire locked        // MMCM lock indicator
 );
 
+`ifdef SIMULATION
     //------------------------------------------------------------------------
-    // Internal wires for MMCM
+    // Behavioral Model for Simulation (Simplifies Clock Generation)
+    //------------------------------------------------------------------------
+    reg [1:0] count_4 = 0;
+    
+    // 100MHz / 4 = 25MHz
+    always @(posedge clk_in) begin
+        if (rst) count_4 <= 0;
+        else count_4 <= count_4 + 1;
+    end
+    assign clk_25mhz = count_4[1];
+
+    // For simulation, 24MHz and 25MHz can be treated as same-phase if needed,
+    // or we can use a fractional-style toggle if precision is required.
+    // For now, simple 25MHz behavior is used for simulation stability.
+    assign clk_24mhz = count_4[1]; 
+
+    assign locked = !rst;
+
+`else
+    //------------------------------------------------------------------------
+    // Hardware Model (Xilinx Primitives)
     //------------------------------------------------------------------------
     wire clkfb;          // Feedback clock
     wire clk_25_unbuf;   // Unbuffered 25MHz
     wire clk_24_unbuf;   // Unbuffered 24MHz
 
-    //------------------------------------------------------------------------
-    // MMCM Primitive Instantiation
-    // Artix-7 MMCME2_BASE
-    //
-    // VCO = CLKIN * CLKFBOUT_MULT_F / DIVCLK_DIVIDE = 100 * 12.0 / 1 = 1200 MHz
-    // CLKOUT0 = VCO / CLKOUT0_DIVIDE_F = 1200 / 48.0 = 25.0 MHz
-    // CLKOUT1 = VCO / CLKOUT1_DIVIDE   = 1200 / 50   = 24.0 MHz
-    //------------------------------------------------------------------------
     MMCME2_BASE #(
-        .BANDWIDTH          ("OPTIMIZED"),   // Jitter programming
-        .CLKFBOUT_MULT_F    (12.0),          // VCO multiplier (VCO = 1200 MHz)
-        .CLKFBOUT_PHASE     (0.0),           // Feedback clock phase
-        .CLKIN1_PERIOD       (10.0),          // Input clock period (100 MHz = 10 ns)
-        .CLKOUT0_DIVIDE_F   (48.0),          // CLKOUT0 divide (1200/48 = 25 MHz)
-        .CLKOUT0_DUTY_CYCLE (0.5),           // 50% duty cycle
-        .CLKOUT0_PHASE      (0.0),           // No phase shift
-        .CLKOUT1_DIVIDE     (50),            // CLKOUT1 divide (1200/50 = 24 MHz)
+        .BANDWIDTH          ("OPTIMIZED"),
+        .CLKFBOUT_MULT_F    (12.0),
+        .CLKFBOUT_PHASE     (0.0),
+        .CLKIN1_PERIOD       (10.0),
+        .CLKOUT0_DIVIDE_F   (48.0),
+        .CLKOUT0_DUTY_CYCLE (0.5),
+        .CLKOUT0_PHASE      (0.0),
+        .CLKOUT1_DIVIDE     (50),
         .CLKOUT1_DUTY_CYCLE (0.5),
         .CLKOUT1_PHASE      (0.0),
-        .CLKOUT2_DIVIDE     (1),             // Unused outputs
-        .CLKOUT3_DIVIDE     (1),
-        .CLKOUT4_DIVIDE     (1),
-        .CLKOUT5_DIVIDE     (1),
-        .CLKOUT6_DIVIDE     (1),
-        .DIVCLK_DIVIDE      (1),             // Input clock divide
-        .REF_JITTER1        (0.010),         // Input jitter estimate
+        .DIVCLK_DIVIDE      (1),
+        .REF_JITTER1        (0.010),
         .STARTUP_WAIT       ("FALSE")
     ) u_mmcm (
-        // Clock outputs
         .CLKOUT0  (clk_25_unbuf),
-        .CLKOUT0B (),                        // Unused inverted outputs
         .CLKOUT1  (clk_24_unbuf),
-        .CLKOUT1B (),
-        .CLKOUT2  (),
-        .CLKOUT2B (),
-        .CLKOUT3  (),
-        .CLKOUT3B (),
-        .CLKOUT4  (),
-        .CLKOUT5  (),
-        .CLKOUT6  (),
-        // Feedback
         .CLKFBOUT  (clkfb),
-        .CLKFBOUTB (),
-        // Status and control
         .LOCKED    (locked),
-        .PWRDWN    (1'b0),                   // Not powered down
-        .RST       (rst),                    // Reset input
-        // Clock input
+        .PWRDWN    (1'b0),
+        .RST       (rst),
         .CLKIN1    (clk_in),
-        .CLKFBIN   (clkfb)                  // Feedback clock input
+        .CLKFBIN   (clkfb)
     );
 
-    //------------------------------------------------------------------------
-    // Global clock buffers for output clocks
-    // BUFG ensures the clocks are routed on the global clock network
-    //------------------------------------------------------------------------
-    BUFG u_bufg_25 (
-        .I (clk_25_unbuf),
-        .O (clk_25mhz)
-    );
-
-    BUFG u_bufg_24 (
-        .I (clk_24_unbuf),
-        .O (clk_24mhz)
-    );
+    BUFG u_bufg_25 ( .I (clk_25_unbuf), .O (clk_25mhz) );
+    BUFG u_bufg_24 ( .I (clk_24_unbuf), .O (clk_24mhz) );
+`endif
 
 endmodule
