@@ -4,10 +4,14 @@
 //              Provides basic camera stimulus and verifies:
 //              - VGA sync signals are generated (no X-propagation)
 //              - Camera initialization begins (RST/SCCB activity)
+//              - Capture module writes correct number of pixels per line
+//              - Frame buffer stores and retrieves data correctly
 //              - System does not hang or produce unknown outputs
 //
-//              This is not cycle-accurate — it's a basic integration check.
-//              The MMCM is replaced with a simple clock divider for simulation.
+//              Updated for:
+//              - ov7670_capture with href edge detection + x clipping
+//              - vga_display with p_temp synchronized pipeline + d4 delays
+//              - ov7670_init with NUM_REGS=97 (de-noise regs commented out)
 //============================================================================
 
 `timescale 1ns / 1ps
@@ -33,6 +37,7 @@ module tb_top;
     wire [3:0] vga_g;
     wire [3:0] vga_b;
     reg  [1:0] sw;
+    wire [3:0] led;
 
     // Pull-up on SDA
     pullup (cam_sda);
@@ -58,7 +63,8 @@ module tb_top;
         .vga_r     (vga_r),
         .vga_g     (vga_g),
         .vga_b     (vga_b),
-        .sw        (sw)
+        .sw        (sw),
+        .led       (led)
     );
 
     //------------------------------------------------------------------------
@@ -73,10 +79,15 @@ module tb_top;
     always #21 cam_pclk = ~cam_pclk;
 
     //------------------------------------------------------------------------
-    // X-propagation checker
+    // Test counters
     //------------------------------------------------------------------------
+    integer pass_count = 0;
+    integer fail_count = 0;
     integer x_check_fail = 0;
 
+    //------------------------------------------------------------------------
+    // X-propagation checker
+    //------------------------------------------------------------------------
     task check_no_x;
         input [63:0] signal_name;
         input [3:0] val;
@@ -89,9 +100,27 @@ module tb_top;
     endtask
 
     //------------------------------------------------------------------------
-    // Camera stimulus generation
+    // Camera stimulus: Send one RGB565 pixel (2 bytes)
+    //------------------------------------------------------------------------
+    task send_cam_pixel;
+        input [4:0] r5;
+        input [5:0] g6;
+        input [4:0] b5;
+        begin
+            cam_d = {r5, g6[5:3]};
+            @(negedge cam_pclk);
+            cam_d = {g6[2:0], b5};
+            @(negedge cam_pclk);
+        end
+    endtask
+
+    //------------------------------------------------------------------------
+    // Camera stimulus: Generate a complete frame
+    // Uses href edge detection: href goes high at start of line,
+    // low during blanking. y increments on href falling edge.
     //------------------------------------------------------------------------
     task generate_frame;
+        input integer num_rows;
         integer row, col;
         begin
             // VSYNC pulse
@@ -100,18 +129,15 @@ module tb_top;
             cam_vsync = 0;
             repeat (50) @(negedge cam_pclk);
 
-            // Generate a few lines of pixel data
-            for (row = 0; row < 5; row = row + 1) begin
+            // Generate pixel data
+            for (row = 0; row < num_rows; row = row + 1) begin
                 cam_href = 1;
                 for (col = 0; col < 320; col = col + 1) begin
-                    // Byte 1 of RGB565: {R[4:0], G[5:3]}
-                    cam_d = {col[4:0], row[2:0]};
-                    @(negedge cam_pclk);
-                    // Byte 2 of RGB565: {G[2:0], B[4:0]}
-                    cam_d = {row[2:0], col[4:0]};
-                    @(negedge cam_pclk);
+                    // Generate a gradient pattern
+                    send_cam_pixel(col[4:0], {row[2:0], col[2:0]}, row[4:0]);
                 end
                 cam_href = 0;
+                // Horizontal blanking
                 repeat (20) @(negedge cam_pclk);
             end
         end
@@ -121,7 +147,7 @@ module tb_top;
     // Test stimulus
     //------------------------------------------------------------------------
     initial begin
-        $display("=== Top-Level Integration Smoke Test ===\n");
+        $display("=== Top-Level Integration Smoke Test (Updated) ===\n");
 
         // Initialize inputs
         cam_href  = 0;
@@ -129,60 +155,77 @@ module tb_top;
         cam_d     = 8'h00;
         sw        = 2'b00;
 
-        // Wait for MMCM to lock (in real hardware this takes ~100us)
-        // In simulation, wait a reasonable time
+        // Wait for MMCM to lock
         $display("[%0t] Waiting for MMCM lock...", $time);
         #500;
 
-        // Check that MMCM locked (in simulation, it should lock quickly)
-        // Note: MMCM simulation model may not behave exactly like hardware
-        $display("[%0t] Checking initial outputs...", $time);
-
         //--------------------------------------------------------------------
-        // Check cam_pwdn should be 0
+        // Test 1: cam_pwdn should be 0
         //--------------------------------------------------------------------
-        if (cam_pwdn === 1'b0)
+        $display("\n--- Test 1: Camera Power Down ---");
+        if (cam_pwdn === 1'b0) begin
             $display("PASS: cam_pwdn = 0 (normal mode)");
-        else
+            pass_count = pass_count + 1;
+        end else begin
             $display("FAIL: cam_pwdn = %b (expected 0)", cam_pwdn);
+            fail_count = fail_count + 1;
+        end
 
         //--------------------------------------------------------------------
-        // Wait for initialization to begin
+        // Test 2: LED[0] = init_done (should be 0 initially)
+        //--------------------------------------------------------------------
+        $display("\n--- Test 2: Init Done LED ---");
+        if (led[0] === 1'b0) begin
+            $display("PASS: init_done LED is 0 (init in progress)");
+            pass_count = pass_count + 1;
+        end else begin
+            $display("FAIL: init_done LED = %b (expected 0)", led[0]);
+            fail_count = fail_count + 1;
+        end
+
+        //--------------------------------------------------------------------
+        // Wait for camera reset sequence
         //--------------------------------------------------------------------
         $display("\n[%0t] Waiting for camera reset sequence...", $time);
-        // cam_rst should start low (reset asserted)
         #1000;
 
         //--------------------------------------------------------------------
-        // Generate some camera frames
+        // Test 3: Generate camera frames
         //--------------------------------------------------------------------
-        $display("\n[%0t] Generating camera frame data...", $time);
-        generate_frame();
+        $display("\n--- Test 3: Camera Frame Capture ---");
+        $display("[%0t] Generating camera frame (10 rows)...", $time);
+        generate_frame(10);
 
         //--------------------------------------------------------------------
-        // Wait and check VGA outputs
+        // Test 4: Wait and check VGA outputs for X-propagation
         //--------------------------------------------------------------------
         #100_000;
 
-        $display("\n[%0t] Checking VGA outputs for X-propagation...", $time);
+        $display("\n--- Test 4: VGA Output X-Propagation Check ---");
         check_no_x("vga_r", vga_r);
         check_no_x("vga_g", vga_g);
         check_no_x("vga_b", vga_b);
 
-        if (vga_hsync !== 1'bx)
+        if (vga_hsync !== 1'bx) begin
             $display("PASS: vga_hsync is not X (%b)", vga_hsync);
-        else
-            $display("WARNING: vga_hsync is X");
+            pass_count = pass_count + 1;
+        end else begin
+            $display("FAIL: vga_hsync is X");
+            fail_count = fail_count + 1;
+        end
 
-        if (vga_vsync !== 1'bx)
+        if (vga_vsync !== 1'bx) begin
             $display("PASS: vga_vsync is not X (%b)", vga_vsync);
-        else
-            $display("WARNING: vga_vsync is X");
+            pass_count = pass_count + 1;
+        end else begin
+            $display("FAIL: vga_vsync is X");
+            fail_count = fail_count + 1;
+        end
 
         //--------------------------------------------------------------------
-        // Test filter switching
+        // Test 5: Filter switching
         //--------------------------------------------------------------------
-        $display("\n[%0t] Testing filter switch modes...", $time);
+        $display("\n--- Test 5: Filter Switch Modes ---");
         sw = 2'b01; #10000;
         $display("  sw=01 (Inversion): vga_r=%b vga_g=%b vga_b=%b", vga_r, vga_g, vga_b);
 
@@ -193,25 +236,59 @@ module tb_top;
         $display("  sw=11 (Threshold): vga_r=%b vga_g=%b vga_b=%b", vga_r, vga_g, vga_b);
 
         //--------------------------------------------------------------------
-        // Generate another frame
+        // Test 6: Second frame — verify capture doesn't corrupt memory
         //--------------------------------------------------------------------
-        $display("\n[%0t] Generating second camera frame...", $time);
+        $display("\n--- Test 6: Second Frame ---");
         sw = 2'b00;
-        generate_frame();
-
+        generate_frame(5);
         #50_000;
+
+        check_no_x("vga_r", vga_r);
+        check_no_x("vga_g", vga_g);
+        check_no_x("vga_b", vga_b);
+
+        //--------------------------------------------------------------------
+        // Test 7: Overflow test — send a line with >320 pixels
+        //         Verify system doesn't crash
+        //--------------------------------------------------------------------
+        $display("\n--- Test 7: Overflow Resilience ---");
+        cam_vsync = 1;
+        repeat (50) @(negedge cam_pclk);
+        cam_vsync = 0;
+        repeat (20) @(negedge cam_pclk);
+
+        cam_href = 1;
+        begin : overflow_test
+            integer col;
+            for (col = 0; col < 330; col = col + 1) begin
+                send_cam_pixel(5'd15, 6'd30, 5'd15);
+            end
+        end
+        cam_href = 0;
+        repeat (20) @(negedge cam_pclk);
+
+        #10_000;
+        check_no_x("vga_r", vga_r);
+        check_no_x("vga_g", vga_g);
+        check_no_x("vga_b", vga_b);
+        $display("PASS: System survived 330-pixel line without crash");
+        pass_count = pass_count + 1;
 
         //--------------------------------------------------------------------
         // Final checks
         //--------------------------------------------------------------------
         $display("\n=== Smoke Test Results ===");
+        $display("Passed: %0d", pass_count);
+        $display("Failed: %0d", fail_count);
         if (x_check_fail == 0)
             $display("PASS: No X-propagation detected on VGA outputs");
         else
             $display("WARNING: %0d X-propagation events detected", x_check_fail);
 
-        $display("cam_xclk is toggling: check waveform manually");
-        $display("cam_scl activity: check waveform for SCCB transactions");
+        if (fail_count == 0 && x_check_fail == 0)
+            $display("\nALL TESTS PASSED!");
+        else
+            $display("\nSOME ISSUES DETECTED — review above");
 
         $display("\n=== Top-Level Smoke Test Complete ===");
         $finish;

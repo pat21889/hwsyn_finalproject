@@ -101,11 +101,10 @@ module vga_display (
     // 3. Pixel Cache Pipeline
     //------------------------------------------------------------------------
     // Stage 1: Register BRAM output (arrives 1 cycle after address)
-    reg [11:0] bram_d1;        // BRAM data delayed 1 cycle
-    reg        h_frac_d1;      // h_frac delayed 1 cycle
-    reg        h_frac_d2;      // h_frac delayed 2 cycles
-    reg        v_frac_d1;      // v_frac delayed 1 cycle
-    reg        v_frac_d2;      // v_frac delayed 2 cycles
+    reg [11:0] p_temp;         // Temporary storage for P(row, col)
+    reg        h_frac_d1, h_frac_d2, h_frac_d3, h_frac_d4;
+    reg [8:0]  src_col_d1, src_col_d2, src_col_d3;
+    reg        v_frac_d1, v_frac_d2, v_frac_d3, v_frac_d4;
 
     // The 4 pixels for the bilinear neighborhood:
     //   p_curr     = P(row, col)       — current source pixel
@@ -117,37 +116,54 @@ module vga_display (
 
     always @(posedge clk) begin
         if (rst) begin
-            bram_d1    <= 12'd0;
+            p_temp     <= 12'd0;
             h_frac_d1  <= 1'b0;
             h_frac_d2  <= 1'b0;
+            h_frac_d3  <= 1'b0;
+            h_frac_d4  <= 1'b0;
+            src_col_d1 <= 9'd0;
+            src_col_d2 <= 9'd0;
+            src_col_d3 <= 9'd0;
             v_frac_d1  <= 1'b0;
             v_frac_d2  <= 1'b0;
+            v_frac_d3  <= 1'b0;
+            v_frac_d4  <= 1'b0;
             p_curr     <= 12'd0;
             p_left     <= 12'd0;
             p_above    <= 12'd0;
             p_diag     <= 12'd0;
         end else begin
             // Pipeline delays for fractional bits
-            h_frac_d1 <= h_frac;
-            h_frac_d2 <= h_frac_d1;
-            v_frac_d1 <= v_frac;
-            v_frac_d2 <= v_frac_d1;
-
+            h_frac_d1  <= h_frac;
+            h_frac_d2  <= h_frac_d1;
+            h_frac_d3  <= h_frac_d2;
+            h_frac_d4  <= h_frac_d3;
+            src_col_d1 <= src_col;
+            src_col_d2 <= src_col_d1;
+            src_col_d3 <= src_col_d2;
+            v_frac_d1  <= v_frac;
+            v_frac_d2  <= v_frac_d1;
+            v_frac_d3  <= v_frac_d2;
+            v_frac_d4  <= v_frac_d3;
+ 
             // BRAM data arrives 1 cycle after address
-            bram_d1 <= rd_data;
-
-            // When h_frac_d1 = 0, bram_d1 contains P(row, col) — the "even" read
-            // When h_frac_d1 = 1, bram_d1 contains P(row_prev, col) — the "odd" read
+            // Use h_frac_d1 to decide what to do with incoming rd_data
             if (h_frac_d1 == 1'b0) begin
-                // Just received P(row, col)
-                // Shift previous current → left
-                p_left <= p_curr;
-                p_curr <= bram_d1;
+                // Just received P(row, col). Cache it.
+                p_temp <= rd_data;
             end else begin
-                // Just received P(row_prev, col)
-                // Shift previous above → diag
-                p_diag  <= p_above;
-                p_above <= bram_d1;
+                // Just received P(row_prev, col). 
+                // Now we have both pixels for the current column.
+                // Update the entire 4-pixel neighborhood at once.
+                if (src_col_d2 == 9'd0) begin
+                    p_left <= p_temp;
+                    p_diag <= rd_data;
+                end else begin
+                    p_left <= p_curr;
+                    p_diag <= p_above;
+                end
+                p_curr  <= p_temp;
+                p_above <= rd_data;
             end
         end
     end
@@ -155,7 +171,7 @@ module vga_display (
     //------------------------------------------------------------------------
     // 4. Bilinear Interpolation (combinational, uses registered pixels)
     //------------------------------------------------------------------------
-    // Use h_frac_d2 and v_frac_d2 (aligned with the pixel data)
+    // Use h_frac_d4 and v_frac_d4 (aligned with the registered pixel data)
     wire [4:0] rc = p_curr[11:8],  rl = p_left[11:8],  ra = p_above[11:8],  rd_pix = p_diag[11:8];
     wire [4:0] gc = p_curr[7:4],   gl = p_left[7:4],   ga = p_above[7:4],   gd = p_diag[7:4];
     wire [4:0] bc = p_curr[3:0],   bl = p_left[3:0],   ba = p_above[3:0],   bd = p_diag[3:0];
@@ -163,7 +179,7 @@ module vga_display (
     reg [3:0] r_out, g_out, b_out;
 
     always @(*) begin
-        case ({v_frac_d2, h_frac_d2})
+        case ({v_frac_d4, h_frac_d4})
             2'b00: begin // Even X, Even Y: direct copy
                 r_out = rc[3:0];
                 g_out = gc[3:0];

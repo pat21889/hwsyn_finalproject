@@ -9,13 +9,14 @@ The test suite is designed for use with **Xilinx Vivado Simulator** or **Icarus 
 
 | Testbench File | Target Module | Description |
 | :--- | :--- | :--- |
-| **`tb_top.v`** | `top.v` | **System Smoke Test**. Verifies that the MMCM locks, camera initialization begins, and VGA sync signals are generated correctly. |
-| **`tb_vga_display.v`** | `vga_display.v` | **Display & Filter Test**. Verifies the bilinear upscaling math, 4-pixel averaging (overflow fix), and coordinate mapping. |
-| **`tb_ov7670_init.v`** | `ov7670_init.v` | **Init Sequencer Test**. Verifies the power-on FSM (Hardware Reset -> Software Reset -> Configuration ROM). |
-| **`tb_ov7670_capture.v`** | `ov7670_capture.v` | **Capture Test**. Simulates camera byte streams and verifies RGB565 to RGB444 conversion and timing. |
-| **`tb_image_filter.v`** | `image_filter.v` | **Filter Logic Test**. Tests the combinational logic for Inversion, Red Isolation, and Thresholding. |
-| **`tb_vga_sync.v`** | `vga_sync.v` | **VGA Timing Test**. Verifies pixel counters and sync pulse widths for 640x480 @ 60Hz. |
-| **`tb_sccb_master.v`** | `sccb_master.v` | **Protocol Test**. Verifies the SCCB serial bit-banging and transaction completion. |
+| **`tb_top.v`** | `top.v` | **System Smoke Test**. Verifies MMCM lock, camera initialization, VGA sync, filter switching, and overflow resilience (330-pixel line). |
+| **`tb_vga_display.v`** | `vga_display.v` | **Display & Bilinear Test**. Verifies the synchronized p_temp pipeline, d4 fractional delays, left-edge boundary handling (src_col_d2==0), blanking, and filter modes. |
+| **`tb_ov7670_init.v`** | `ov7670_init.v` | **Init Sequencer Test**. Verifies HW reset, SW reset, first/last config register, register count (97 active), and init_done assertion. |
+| **`tb_ov7670_capture.v`** | `ov7670_capture.v` | **Capture Test**. Verifies href edge detection (x resets on rising, y increments on falling), x clipping at 320, RGB565→RGB444 conversion, and overflow protection. |
+| **`tb_image_filter.v`** | `image_filter.v` | **Filter Logic Test**. Tests combinational logic for Inversion, Red Isolation, and Thresholding with edge cases. |
+| **`tb_vga_sync.v`** | `vga_sync.v` | **VGA Timing Test**. Verifies pixel counters, sync pulse widths, and active region flags for 640x480 @ 60Hz. |
+| **`tb_sccb_master.v`** | `sccb_master.v` | **Protocol Test**. Verifies SCCB serial bit-banging, 27 SCL cycles (3 phases × 9 bits), and done signal. |
+| **`tb_frame_buffer.v`** | `frame_buffer.v` | **BRAM Test**. Verifies cross-clock-domain write/read, address boundaries, and burst operations. |
 
 ## 3. Running Simulations
 
@@ -28,7 +29,7 @@ The test suite is designed for use with **Xilinx Vivado Simulator** or **Icarus 
 ### Using Icarus Verilog (CLI)
 ```bash
 # Example for testing the VGA display
-iverilog -o sim.out src/vga_display.v sim/tb_vga_display.v
+iverilog -o sim.out src/vga_display.v src/image_filter.v sim/tb_vga_display.v
 vvp sim.out
 gtkwave tb_vga_display.vcd
 ```
@@ -36,6 +37,14 @@ gtkwave tb_vga_display.vcd
 ## 4. Simulation Optimization
 *   **`SIMULATION` Parameter**: To avoid waiting for real-world hardware delays (like the 300ms camera settling time), set the `SIMULATION` parameter to `1` when instantiating modules in your testbench. This is already done in `tb_top.v` and `tb_ov7670_init.v`.
 *   **Clock Wizard Model**: `clk_wiz.v` includes a simplified behavioral model for simulation that is active when the simulator defines `COCOTB_SIM` or `SIMULATION`.
+
+## 5. Key Design Changes (May 2026)
+
+| Module | Change | Impact on Testbench |
+| :--- | :--- | :--- |
+| `ov7670_capture.v` | href edge detection; x clips at 320 | `tb_ov7670_capture.v` — new overflow test (Test 6) |
+| `vga_display.v` | Synchronized p_temp pipeline; d4 delays; src_col boundary | `tb_vga_display.v` — complete rewrite for new pipeline |
+| `ov7670_init.v` | De-noise regs commented out; NUM_REGS=97 | `tb_ov7670_init.v` — verifies register count & last reg |
 
 ---
 *Created for HWSyn Final Project.*

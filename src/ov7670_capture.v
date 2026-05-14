@@ -25,6 +25,8 @@ module ov7670_capture (
     assign addr = y * 320 + x;
     assign dout = dout_reg;
 
+    reg href_prev;
+ 
     always @(posedge pclk) begin
         if (vsync) begin
             // During VSYNC high: continuously reset (level-sensitive, NOT edge)
@@ -32,33 +34,38 @@ module ov7670_capture (
             y       <= 0;
             wr_hold <= 0;
             we      <= 0;
+            href_prev <= 0;
         end else begin
+            href_prev <= href;
+ 
+            // Start of a new line: Reset horizontal counter
+            if (href && !href_prev) begin
+                x <= 0;
+            end
+ 
+            // End of a line: Increment vertical counter
+            if (!href && href_prev) begin
+                if (y < 239) y <= y + 1;
+                else         y <= 0;
+            end
+ 
             // Standard MSB-first shift order (Correct Byte Alignment)
-            // Camera sends Byte 1 then Byte 2: {RRRRR_GGG, GGG_BBBBB}
             d_latch <= {d_latch[7:0], d};
-
+ 
             // wr_hold is a 2-stage pipeline that toggles every other clock
-            // when href is high, creating a write pulse every 2 PCLKs
             wr_hold <= {wr_hold[0], (href && !wr_hold[0])};
-
+ 
             // Write enable is delayed by 1 cycle from wr_hold[1]
-            we <= wr_hold[1];
-
+            // Also clip writing if x exceeds frame width
+            we <= wr_hold[1] && (x < 320);
+ 
             if (wr_hold[1]) begin
                 // RGB565 to RGB444 down-conversion
-                // Extract top 4 bits of each channel
-                // Red: d_latch[15:12], Green: d_latch[10:7], Blue: d_latch[4:1]
                 dout_reg <= {d_latch[15:12], d_latch[10:7], d_latch[4:1]};
-
-                // Increment position (row-major order)
-                if (x < 319) begin
+ 
+                // Increment position only if within bounds
+                if (x < 320) begin
                     x <= x + 1;
-                end else begin
-                    x <= 0;
-                    if (y < 239)
-                        y <= y + 1;
-                    else
-                        y <= 0;
                 end
             end
         end

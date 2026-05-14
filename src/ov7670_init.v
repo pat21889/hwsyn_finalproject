@@ -61,7 +61,7 @@ module ov7670_init #(
     // Total entries: 66 registers + 1 end marker
     // The software reset (COM7=0x80) is sent separately before this table.
     //------------------------------------------------------------------------
-    localparam NUM_REGS = 7'd101; // Number of register entries (Added 0x4C for Noise Strength)
+    localparam NUM_REGS = 7'd97; // Number of register entries (de-noise regs 97-100 commented out)
 
 
     //------------------------------------------------------------------------
@@ -85,11 +85,11 @@ module ov7670_init #(
                 7'd6:  get_reg_entry = {8'h1E, 8'h31}; // MVFP: mirror + flip
 
                 // === Framing: QVGA window ===
-                7'd7:  get_reg_entry = {8'h17, 8'h13}; // HSTART
-                7'd8:  get_reg_entry = {8'h18, 8'h01}; // HSTOP
+                7'd7:  get_reg_entry = {8'h17, 8'h16}; // HSTART (shifted right +24px total)
+                7'd8:  get_reg_entry = {8'h18, 8'h04}; // HSTOP
                 7'd9:  get_reg_entry = {8'h32, 8'hB6}; // HREF
-                7'd10: get_reg_entry = {8'h19, 8'h02}; // VSTRT
-                7'd11: get_reg_entry = {8'h1A, 8'h7A}; // VSTOP
+                7'd10: get_reg_entry = {8'h19, 8'h03}; // VSTRT (shifted down)
+                7'd11: get_reg_entry = {8'h1A, 8'h7B}; // VSTOP
                 7'd12: get_reg_entry = {8'h03, 8'h0A}; // VREF
 
                 // === Scaling: NO DCW (direct QVGA output) ===
@@ -127,7 +127,7 @@ module ov7670_init #(
                 7'd38: get_reg_entry = {8'h00, 8'h00}; // GAIN
                 7'd39: get_reg_entry = {8'h10, 8'h00}; // AECH
                 7'd40: get_reg_entry = {8'h0D, 8'h00}; // COM4
-                7'd41: get_reg_entry = {8'h14, 8'h28}; // COM9: 4x AGC ceiling
+                7'd41: get_reg_entry = {8'h14, 8'h18}; // COM9: 2x AGC ceiling (reduced from 4x to lower noise)
                 7'd42: get_reg_entry = {8'hA5, 8'h05}; // BD50MAX
                 7'd43: get_reg_entry = {8'hAB, 8'h07}; // BD60MAX
                 7'd44: get_reg_entry = {8'h24, 8'h75}; // AEW: AGC/AEC stable upper limit
@@ -188,10 +188,10 @@ module ov7670_init #(
                 7'd94: get_reg_entry = {8'hB2, 8'h0E}; // Magic reserved
                 7'd95: get_reg_entry = {8'hB3, 8'h82}; // Magic reserved
                 7'd96: get_reg_entry = {8'hB8, 8'h0A}; // Magic reserved
-                7'd97: get_reg_entry = {8'h41, 8'h3A}; // COM16: Matrix ENABLED, De-noise ENABLED
-                7'd98: get_reg_entry = {8'h76, 8'hE1}; // REG76: De-noise ENABLED
-                7'd99: get_reg_entry = {8'h77, 8'h01}; // REG77: De-noise offset
-                7'd100:get_reg_entry = {8'h4C, 8'h00}; // DNSTH: De-noise strength
+                // 7'd97: get_reg_entry = {8'h41, 8'h3E}; // COM16: Matrix ENABLED, De-noise ENABLED, Edge Enhancement ENABLED
+                // 7'd98: get_reg_entry = {8'h76, 8'hE1}; // REG76: De-noise ENABLED
+                // 7'd99: get_reg_entry = {8'h77, 8'h11}; // REG77: De-noise offset (increased)
+                // 7'd100:get_reg_entry = {8'h4C, 8'h10}; // DNSTH: De-noise strength (maximized for noise reduction)
 
                 default: get_reg_entry = {8'hFF, 8'hFF}; // End marker
             endcase
